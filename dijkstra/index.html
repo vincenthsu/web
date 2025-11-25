@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dijkstra 演算法視覺化 (React + Tailwind)</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+
+    <!-- Babel Standalone -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Google Fonts: Noto Sans TC for Traditional Chinese -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #f3f4f6;
+        }
+        .code-font {
+            font-family: 'Fira Code', monospace;
+        }
+        /* Custom scrollbar for code block */
+        .custom-scroll::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        .custom-scroll::-webkit-scrollbar-track {
+            background: #1f2937;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: #4b5563;
+            border-radius: 4px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb:hover {
+            background: #6b7280;
+        }
+
+        .node-transition {
+            transition: all 0.3s ease-in-out;
+        }
+        .edge-transition {
+            transition: stroke 0.3s ease, stroke-width 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo } = React;
+
+        // --- C++ Code Snippet ---
+        const cppCode = `vector<int> dijkstra(int V, vector<vector<pair<int, int>>>& adj, int src) {
+    priority_queue<pair<int, int>, vector<pair<int, int>>, greater<pair<int, int>>> pq;
+    vector<int> dist(V, INT_MAX);
+
+    dist[src] = 0;
+    pq.push({0, src});
+
+    while (!pq.empty()) {
+        int u = pq.top().second;
+        int d = pq.top().first;
+        pq.pop();
+
+        if (d > dist[u]) continue;
+
+        for (auto& edge : adj[u]) {
+            int v = edge.first;
+            int weight = edge.second;
+
+            if (dist[u] + weight < dist[v]) {
+                dist[v] = dist[u] + weight;
+                pq.push({dist[v], v});
+            }
+        }
+    }
+    return dist;
+}`;
+
+        // --- Constants & Helpers ---
+        const LINES = {
+            INIT: [2, 3, 5, 6],
+            WHILE: 8,
+            POP: [9, 10, 11],
+            CHECK_OLD: 13,
+            FOR_LOOP: 15,
+            CHECK_RELAX: 19,
+            RELAX: [20, 21]
+        };
+
+        const NODE_RADIUS = 20;
+        const CANVAS_WIDTH = 600;
+        const CANVAS_HEIGHT = 500;
+        const INF = 9999;
+
+        // Generate random graph positions (Circular layout for clarity)
+        const generateGraph = (numNodes = 6) => {
+            const nodes = [];
+            const edges = [];
+            const centerX = CANVAS_WIDTH / 2;
+            const centerY = CANVAS_HEIGHT / 2;
+            const radius = 180;
+
+            for (let i = 0; i < numNodes; i++) {
+                const angle = (i / numNodes) * 2 * Math.PI - Math.PI / 2;
+                nodes.push({
+                    id: i,
+                    x: centerX + radius * Math.cos(angle),
+                    y: centerY + radius * Math.sin(angle)
+                });
+            }
+
+            // Create adjacency matrix to track duplicates
+            const adj = Array.from({ length: numNodes }, () => []);
+
+            // Ensure connectivity (Spanning tree-ish)
+            for (let i = 0; i < numNodes - 1; i++) {
+                const weight = Math.floor(Math.random() * 9) + 1;
+                edges.push({ source: i, target: i + 1, weight });
+                adj[i].push({ to: i + 1, weight });
+                adj[i + 1].push({ to: i, weight });
+            }
+            // Close the loop
+            const wLast = Math.floor(Math.random() * 9) + 1;
+            edges.push({ source: numNodes - 1, target: 0, weight: wLast });
+            adj[numNodes - 1].push({ to: 0, weight: wLast });
+            adj[0].push({ to: numNodes - 1, weight: wLast });
+
+            // Add random extra edges
+            const extraEdges = Math.floor(numNodes * 0.8);
+            for (let k = 0; k < extraEdges; k++) {
+                const u = Math.floor(Math.random() * numNodes);
+                const v = Math.floor(Math.random() * numNodes);
+                if (u !== v && !adj[u].some(e => e.to === v)) {
+                    const weight = Math.floor(Math.random() * 9) + 1;
+                    edges.push({ source: u, target: v, weight });
+                    adj[u].push({ to: v, weight });
+                    adj[v].push({ to: u, weight });
+                }
+            }
+
+            return { nodes, edges, adj };
+        };
+
+        // --- Algorithm Solver ---
+        const solveDijkstra = (numNodes, adj, src) => {
+            const steps = [];
+            const dist = Array(numNodes).fill(INF);
+            const pq = []; // Using array as PQ for visualization simplicity
+            const parent = Array(numNodes).fill(null);
+
+            // Initial State
+            steps.push({
+                dist: [...dist],
+                pq: [...pq],
+                activeNode: null,
+                neighborNode: null,
+                line: LINES.INIT,
+                desc: "初始化距離陣列與 Priority Queue (PQ)。"
+            });
+
+            dist[src] = 0;
+            pq.push({ d: 0, u: src });
+            pq.sort((a, b) => a.d - b.d);
+
+            steps.push({
+                dist: [...dist],
+                pq: [...pq],
+                activeNode: src, // Just to highlight start
+                neighborNode: null,
+                line: LINES.INIT,
+                desc: `設定起點 ${src} 距離為 0，推入 PQ。`
+            });
+
+            while (pq.length > 0) {
+                // Snapshot before pop
+                steps.push({
+                    dist: [...dist],
+                    pq: [...pq],
+                    activeNode: null,
+                    neighborNode: null,
+                    line: LINES.WHILE,
+                    desc: "PQ 不為空，準備取出最小距離節點。"
+                });
+
+                const { d, u } = pq.shift(); // Simulate pop min
+
+                // Pop visualization
+                steps.push({
+                    dist: [...dist],
+                    pq: [...pq],
+                    activeNode: u,
+                    neighborNode: null,
+                    line: LINES.POP,
+                    desc: `從 PQ 取出最小距離節點 ${u} (距離: ${d})。`
+                });
+
+                if (d > dist[u]) {
+                     steps.push({
+                        dist: [...dist],
+                        pq: [...pq],
+                        activeNode: u,
+                        neighborNode: null,
+                        line: LINES.CHECK_OLD,
+                        desc: `節點 ${u} 的當前距離 (${d}) 大於已知最短距離 (${dist[u]})，忽略此過期資訊。`
+                    });
+                    continue;
+                }
+
+                // Check neighbors
+                const neighbors = adj[u] || [];
+                for (let edge of neighbors) {
+                    const v = edge.to;
+                    const weight = edge.weight;
+
+                    steps.push({
+                        dist: [...dist],
+                        pq: [...pq],
+                        activeNode: u,
+                        neighborNode: v,
+                        line: LINES.FOR_LOOP,
+                        desc: `檢查節點 ${u} 的鄰居 ${v} (邊權重: ${weight})。`
+                    });
+
+                    if (dist[u] + weight < dist[v]) {
+                        const oldDist = dist[v];
+                        dist[v] = dist[u] + weight;
+                        parent[v] = u;
+                        pq.push({ d: dist[v], u: v });
+                        pq.sort((a, b) => a.d - b.d);
+
+                        steps.push({
+                            dist: [...dist],
+                            pq: [...pq],
+                            activeNode: u,
+                            neighborNode: v,
+                            line: LINES.RELAX,
+                            desc: `鬆弛 (Relax) 成功: ${u} -> ${v}。更新 ${v} 的距離從 ${oldDist === INF ? '∞' : oldDist} 為 ${dist[v]}，推入 PQ。`
+                        });
+                    } else {
+                         steps.push({
+                            dist: [...dist],
+                            pq: [...pq],
+                            activeNode: u,
+                            neighborNode: v,
+                            line: LINES.CHECK_RELAX,
+                            desc: `不需要更新: ${u} 到 ${v} 的距離 (${dist[u]} + ${weight} = ${dist[u] + weight}) >= 目前距離 (${dist[v]})。`
+                        });
+                    }
+                }
+            }
+
+            steps.push({
+                dist: [...dist],
+                pq: [],
+                activeNode: null,
+                neighborNode: null,
+                line: [],
+                desc: "PQ 為空，演算法結束。所有最短路徑已找到。"
+            });
+
+            return steps;
+        };
+
+        // --- Main Component ---
+        const App = () => {
+            // Configuration State
+            const [numNodes, setNumNodes] = useState(6);
+            const [startNode, setStartNode] = useState(0);
+
+            // Graph State
+            const [graph, setGraph] = useState({ nodes: [], edges: [], adj: [] });
+
+            // Algorithm State
+            const [steps, setSteps] = useState([]);
+            const [currentStepIndex, setCurrentStepIndex] = useState(0);
+
+            // Playback State
+            const [isPlaying, setIsPlaying] = useState(false);
+            const [speed, setSpeed] = useState(1000); // ms delay
+            const timerRef = useRef(null);
+
+            // Init Graph
+            useEffect(() => {
+                resetGraph();
+            }, []);
+
+            // Re-calculate steps when graph or start node changes
+            useEffect(() => {
+                if (graph.nodes.length > 0) {
+                    const algoSteps = solveDijkstra(graph.nodes.length, graph.adj, startNode);
+                    setSteps(algoSteps);
+                    setCurrentStepIndex(0);
+                    setIsPlaying(false);
+                }
+            }, [graph, startNode]);
+
+            const resetGraph = () => {
+                const newGraph = generateGraph(numNodes);
+                setGraph(newGraph);
+                setStartNode(0);
+            };
+
+            // Playback Logic
+            useEffect(() => {
+                if (isPlaying) {
+                    timerRef.current = setInterval(() => {
+                        setCurrentStepIndex(prev => {
+                            if (prev < steps.length - 1) return prev + 1;
+                            setIsPlaying(false);
+                            return prev;
+                        });
+                    }, speed);
+                } else {
+                    clearInterval(timerRef.current);
+                }
+                return () => clearInterval(timerRef.current);
+            }, [isPlaying, steps.length, speed]);
+
+            const currentStep = steps[currentStepIndex] || {
+                dist: [], pq: [], activeNode: null, neighborNode: null, line: [], desc: "準備就緒"
+            };
+
+            // --- Visualization Helpers ---
+            const getEdgeColor = (source, target, weight) => {
+                if (!currentStep) return "#d1d5db"; // gray-300
+
+                // Edge currently being processed
+                if (currentStep.activeNode === source && currentStep.neighborNode === target) {
+                    return "#f59e0b"; // amber-500 (Processing)
+                }
+                if (currentStep.activeNode === target && currentStep.neighborNode === source) {
+                    return "#f59e0b"; // Undirected logic visual check
+                }
+
+                return "#9ca3af"; // gray-400
+            };
+
+            const getEdgeWidth = (source, target) => {
+                 if (currentStep.activeNode === source && currentStep.neighborNode === target) return 4;
+                 if (currentStep.activeNode === target && currentStep.neighborNode === source) return 4;
+                 return 2;
+            }
+
+            const getNodeColor = (id) => {
+                if (!currentStep) return "bg-white border-gray-400";
+
+                if (currentStep.activeNode === id) return "bg-blue-500 border-blue-700 text-white shadow-[0_0_15px_rgba(59,130,246,0.5)]"; // Active
+                if (currentStep.neighborNode === id) return "bg-yellow-300 border-yellow-500 text-gray-800"; // Neighbor
+                if (currentStep.dist[id] !== INF) return "bg-green-100 border-green-500 text-gray-800"; // Visited/Updated
+
+                return "bg-white border-gray-400 text-gray-800"; // Default
+            };
+
+            const isLineHighlighted = (lineNum) => {
+                if (!currentStep.line) return false;
+                if (Array.isArray(currentStep.line)) return currentStep.line.includes(lineNum);
+                return currentStep.line === lineNum;
+            };
+
+            // --- Handlers ---
+            const handleNext = () => setCurrentStepIndex(prev => Math.min(prev + 1, steps.length - 1));
+            const handlePrev = () => setCurrentStepIndex(prev => Math.max(prev - 1, 0));
+            const handleResetAlgo = () => { setIsPlaying(false); setCurrentStepIndex(0); };
+            const handleRandomize = () => { setIsPlaying(false); resetGraph(); };
+
+            return (
+                <div className="min-h-screen p-4 flex flex-col gap-4 max-w-7xl mx-auto">
+                    {/* Header */}
+                    <header className="flex justify-between items-center bg-white p-4 rounded-lg shadow-sm">
+                        <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600"><circle cx="12" cy="12" r="10"/><path d="m16.24 7.76-2.12 6.36-6.36 2.12 2.12-6.36 6.36-2.12z"/></svg>
+                            Dijkstra 演算法視覺化
+                        </h1>
+                        <div className="text-sm text-gray-500">
+                            Single File React + Tailwind
+                        </div>
+                    </header>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-grow">
+
+                        {/* Left Column: Visualization & Controls (8/12) */}
+                        <div className="lg:col-span-8 flex flex-col gap-4">
+
+                            {/* Canvas Area */}
+                            <div className="bg-white rounded-lg shadow-md p-4 relative overflow-hidden flex justify-center items-center" style={{ height: '500px' }}>
+                                <svg width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="absolute top-0 left-0 pointer-events-none">
+                                    <defs>
+                                        <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="28" refY="3.5" orient="auto">
+                                            <polygon points="0 0, 10 3.5, 0 7" fill="#9ca3af" />
+                                        </marker>
+                                    </defs>
+                                    {/* Edges */}
+                                    {graph.edges.map((edge, idx) => {
+                                        const u = graph.nodes[edge.source];
+                                        const v = graph.nodes[edge.target];
+                                        const color = getEdgeColor(edge.source, edge.target, edge.weight);
+                                        const width = getEdgeWidth(edge.source, edge.target);
+                                        return (
+                                            <g key={idx}>
+                                                <line
+                                                    x1={u.x} y1={u.y} x2={v.x} y2={v.y}
+                                                    stroke={color} strokeWidth={width}
+                                                    className="edge-transition"
+                                                />
+                                                {/* Weight Label */}
+                                                <rect x={(u.x + v.x)/2 - 8} y={(u.y + v.y)/2 - 10} width="16" height="20" fill="white" fillOpacity="0.8" rx="4" />
+                                                <text
+                                                    x={(u.x + v.x) / 2} y={(u.y + v.y) / 2 + 5}
+                                                    textAnchor="middle" fill="#4b5563" fontWeight="bold" fontSize="12"
+                                                >
+                                                    {edge.weight}
+                                                </text>
+                                            </g>
+                                        );
+                                    })}
+                                </svg>
+
+                                {/* Nodes (Rendered as Divs for easier styling/z-index) */}
+                                {graph.nodes.map((node) => (
+                                    <div
+                                        key={node.id}
+                                        className={`absolute flex items-center justify-center w-10 h-10 rounded-full border-2 font-bold node-transition shadow-sm ${getNodeColor(node.id)}`}
+                                        style={{
+                                            left: node.x - NODE_RADIUS,
+                                            top: node.y - NODE_RADIUS,
+                                            zIndex: 10
+                                        }}
+                                    >
+                                        {node.id}
+                                        {/* Distance Badge */}
+                                        <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-0.5 rounded-full whitespace-nowrap">
+                                            {currentStep.dist[node.id] === INF ? '∞' : currentStep.dist[node.id]}
+                                        </div>
+                                    </div>
+                                ))}
+
+                                <div className="absolute top-2 left-2 flex flex-col gap-2">
+                                    <div className="flex items-center gap-2 text-xs text-gray-600">
+                                        <div className="w-3 h-3 rounded-full bg-blue-500"></div> 當前節點 (u)
+                                    </div>
+                                    <div className="flex items-center gap-2 text-xs text-gray-600">
+                                        <div className="w-3 h-3 rounded-full bg-yellow-300 border border-yellow-500"></div> 鄰居節點 (v)
+                                    </div>
+                                    <div className="flex items-center gap-2 text-xs text-gray-600">
+                                        <div className="w-3 h-3 rounded-full bg-green-100 border border-green-500"></div> 已更新/訪問
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Control Panel */}
+                            <div className="bg-white rounded-lg shadow-sm p-4 flex flex-wrap gap-4 items-center justify-between">
+                                <div className="flex gap-2 items-center">
+                                    <button onClick={handleResetAlgo} className="p-2 bg-gray-100 rounded hover:bg-gray-200 transition" title="重置演算法">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.766 9.766 0 0 0-7.143 2.749"/><path d="M3 12a9 9 0 0 0 9 9 9.766 9.766 0 0 0 7.143-2.749"/><path d="M21 12h-6"/><path d="M3 12h6"/></svg>
+                                    </button>
+                                    <button onClick={handlePrev} disabled={currentStepIndex === 0} className="p-2 bg-gray-100 rounded hover:bg-gray-200 disabled:opacity-50 transition" title="上一步">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                                    </button>
+                                    <button onClick={() => setIsPlaying(!isPlaying)} className={`p-2 rounded text-white transition flex items-center gap-1 ${isPlaying ? 'bg-amber-500 hover:bg-amber-600' : 'bg-green-500 hover:bg-green-600'}`}>
+                                        {isPlaying ? (
+                                            <><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> 暫停</>
+                                        ) : (
+                                            <><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg> 開始</>
+                                        )}
+                                    </button>
+                                    <button onClick={handleNext} disabled={currentStepIndex === steps.length - 1} className="p-2 bg-gray-100 rounded hover:bg-gray-200 disabled:opacity-50 transition" title="下一步">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                                    </button>
+                                </div>
+
+                                <div className="flex items-center gap-4 border-l pl-4 border-gray-300">
+                                    <div className="flex flex-col">
+                                        <label className="text-xs text-gray-500">速度 ({speed}ms)</label>
+                                        <input
+                                            type="range" min="100" max="2000" step="100"
+                                            value={speed} onChange={(e) => setSpeed(Number(e.target.value))}
+                                            className="w-24 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                                        />
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <label className="text-xs text-gray-500">節點數量: {numNodes}</label>
+                                        <input
+                                            type="range" min="3" max="10" step="1"
+                                            value={numNodes} onChange={(e) => setNumNodes(Number(e.target.value))}
+                                            className="w-24 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                                        />
+                                    </div>
+                                    <button onClick={handleRandomize} className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition">
+                                        隨機重置
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Log Area */}
+                            <div className="bg-gray-800 text-white p-4 rounded-lg shadow-inner font-mono text-sm min-h-[80px]">
+                                <span className="text-green-400">Step {currentStepIndex + 1}/{steps.length}:</span> {currentStep.desc}
+                            </div>
+                        </div>
+
+                        {/* Right Column: Code & Data (4/12) */}
+                        <div className="lg:col-span-4 flex flex-col gap-4">
+
+                            {/* Priority Queue Visual */}
+                            <div className="bg-white rounded-lg shadow-sm p-4">
+                                <h3 className="text-sm font-bold text-gray-600 mb-2 border-b pb-1">Priority Queue (Min-Heap)</h3>
+                                <div className="flex gap-2 overflow-x-auto pb-2 min-h-[50px]">
+                                    {currentStep.pq.length === 0 ? (
+                                        <span className="text-gray-400 text-sm italic">Empty</span>
+                                    ) : (
+                                        currentStep.pq.map((item, idx) => (
+                                            <div key={idx} className="flex flex-col items-center bg-purple-50 border border-purple-200 rounded p-1 min-w-[50px] shadow-sm">
+                                                <span className="text-xs text-gray-500">節點 {item.u}</span>
+                                                <span className="font-bold text-purple-700">{item.d}</span>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Distance Table */}
+                            <div className="bg-white rounded-lg shadow-sm p-4">
+                                <h3 className="text-sm font-bold text-gray-600 mb-2 border-b pb-1">最短距離表 (dist[])</h3>
+                                <div className="grid grid-cols-5 gap-1 text-center">
+                                    {currentStep.dist.map((d, i) => (
+                                        <div key={i} className={`p-1 rounded text-xs border ${i === currentStep.activeNode ? 'bg-blue-100 border-blue-400 font-bold' : 'bg-gray-50 border-gray-200'}`}>
+                                            <div className="text-gray-400">Idx {i}</div>
+                                            <div className={d === INF ? 'text-gray-400' : 'text-gray-800'}>
+                                                {d === INF ? '∞' : d}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Code Block */}
+                            <div className="bg-[#1e1e1e] rounded-lg shadow-lg overflow-hidden flex flex-col flex-grow min-h-[300px]">
+                                <div className="bg-[#2d2d2d] px-4 py-2 text-gray-300 text-xs flex justify-between items-center">
+                                    <span>C++ Implementation</span>
+                                    <span className="text-[10px] bg-blue-600 px-1 rounded">Read-only</span>
+                                </div>
+                                <div className="p-4 overflow-auto custom-scroll flex-grow code-font text-xs text-gray-300 leading-5">
+                                    {cppCode.split('\n').map((line, index) => {
+                                        const lineNum = index + 1;
+                                        const isHighlighted = isLineHighlighted(lineNum);
+                                        return (
+                                            <div key={index} className={`flex ${isHighlighted ? 'bg-[#374151] text-yellow-300' : ''}`}>
+                                                <span className="w-6 text-gray-600 select-none text-right mr-3">{lineNum}</span>
+                                                <pre className="m-0 whitespace-pre-wrap">{line}</pre>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

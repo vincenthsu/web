@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Number of Islands Visualizer (LeetCode 200)</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        /* Custom scrollbar for code block */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #1e293b; 
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #475569; 
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #64748b; 
+        }
+        
+        /* Smooth transitions for grid cells */
+        .cell-transition {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-slate-800 font-sans overflow-hidden">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useCallback } = React;
+
+        // --- Icons (Inline SVGs to replace lucide-react dependency) ---
+        const IconPlay = ({ className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+        );
+        const IconPause = ({ className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+        );
+        const IconRotateCcw = ({ className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>
+        );
+        const IconChevronRight = ({ className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="9 18 15 12 9 6"></polyline></svg>
+        );
+        const IconChevronLeft = ({ className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="15 18 9 12 15 6"></polyline></svg>
+        );
+        const IconMap = ({ className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon><line x1="8" y1="2" x2="8" y2="18"></line><line x1="16" y1="6" x2="16" y2="22"></line></svg>
+        );
+        const IconCode = ({ className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+        );
+        const IconSettings = ({ className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.47a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.39a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+        );
+
+        // --- Constants & Defaults ---
+
+        const EXAMPLE_1 = [
+            ["1","1","1","1","0"],
+            ["1","1","0","1","0"],
+            ["1","1","0","0","0"],
+            ["0","0","0","0","0"]
+        ];
+
+        const EXAMPLE_2 = [
+            ["1","1","0","0","0"],
+            ["1","1","0","0","0"],
+            ["0","0","1","0","0"],
+            ["0","0","0","1","1"]
+        ];
+
+        // C++ Code for display and mapping
+        const C_CODE = `class Solution {
+public:
+    void dfs(vector<vector<char>>& grid, int r, int c) {
+        int m = grid.size(), n = grid[0].size();
+        // 檢查邊界與是否為水/已訪問
+        if (r < 0 || c < 0 || r >= m || c >= n || grid[r][c] == '0') 
+            return;
+        
+        grid[r][c] = '0'; // 標記為已訪問 (變成水)
+        
+        // 遞迴訪問上下左右
+        dfs(grid, r + 1, c); // 下
+        dfs(grid, r - 1, c); // 上
+        dfs(grid, r, c + 1); // 右
+        dfs(grid, r, c - 1); // 左
+    }
+
+    int numIslands(vector<vector<char>>& grid) {
+        if (grid.empty()) return 0;
+        int count = 0;
+        int m = grid.size(), n = grid[0].size();
+        
+        for (int i = 0; i < m; ++i) {
+            for (int j = 0; j < n; ++j) {
+                if (grid[i][j] == '1') {
+                    count++;
+                    dfs(grid, i, j);
+                }
+            }
+        }
+        return count;
+    }
+};`;
+
+        // Line numbers mapping for highlighting
+        const LINES = {
+            DFS_CHECK: 5,
+            DFS_MARK: 8,
+            DFS_RECURSE: 11, // Covers 11-14 broadly
+            MAIN_LOOP: 22,
+            CHECK_LAND: 24,
+            INCREMENT: 25,
+            CALL_DFS: 26,
+            RETURN: 30
+        };
+
+        // --- Helper Functions ---
+
+        const cloneGrid = (grid) => grid.map(row => [...row]);
+
+        // --- Main Component ---
+
+        function NumberOfIslandsVisualizer() {
+            // State
+            const [gridInput, setGridInput] = useState(JSON.stringify(EXAMPLE_1, null, 2));
+            const [grid, setGrid] = useState(EXAMPLE_1);
+            const [steps, setSteps] = useState([]);
+            const [currentStep, setCurrentStep] = useState(0);
+            const [isPlaying, setIsPlaying] = useState(false);
+            const [playbackSpeed, setPlaybackSpeed] = useState(500);
+            const [error, setError] = useState(null);
+
+            // References for interval
+            const timerRef = useRef(null);
+
+            // Initialize Algorithm Logic (Pre-calculation)
+            const generateSteps = useCallback((initialGrid) => {
+                const history = [];
+                const workingGrid = cloneGrid(initialGrid);
+                const m = workingGrid.length;
+                const n = workingGrid[0].length;
+                let islandCount = 0;
+
+                // Helper to push state
+                const pushState = (r, c, line, msg, activeId = null, highlight = []) => {
+                    history.push({
+                        grid: cloneGrid(workingGrid),
+                        r, c,
+                        line,
+                        message: msg,
+                        islandCount,
+                        activeId, // For marking the specific cell being processed
+                        highlight // For marking a group (like stack trace visually)
+                    });
+                };
+
+                // Initial State
+                pushState(-1, -1, LINES.MAIN_LOOP, "演算法開始：準備遍歷網格");
+
+                const dfs = (r, c) => {
+                    // Step: Check boundaries/validity
+                    pushState(r, c, LINES.DFS_CHECK, `DFS檢查: [${r}, ${c}]`, `${r}-${c}`);
+                    
+                    if (r < 0 || c < 0 || r >= m || c >= n || workingGrid[r][c] === '0' || workingGrid[r][c] === '2') {
+                        // '2' represents visited land visually preserved
+                        return;
+                    }
+
+                    // Step: Mark as visited
+                    workingGrid[r][c] = '2'; // 2 means "Visited Land" for visualization purposes
+                    pushState(r, c, LINES.DFS_MARK, `標記 [${r}, ${c}] 為已訪問 (變成水)`, `${r}-${c}`);
+
+                    // Recursion
+                    // Down
+                    dfs(r + 1, c);
+                    // Up
+                    dfs(r - 1, c);
+                    // Right
+                    dfs(r, c + 1);
+                    // Left
+                    dfs(r, c - 1);
+                };
+
+                for (let i = 0; i < m; ++i) {
+                    for (let j = 0; j < n; ++j) {
+                        pushState(i, j, LINES.MAIN_LOOP, `主迴圈：移動到 [${i}, ${j}]`, `${i}-${j}`);
+                        
+                        if (workingGrid[i][j] === '1') {
+                            pushState(i, j, LINES.CHECK_LAND, `發現陸地 '1' 於 [${i}, ${j}]`, `${i}-${j}`);
+                            
+                            islandCount++;
+                            pushState(i, j, LINES.INCREMENT, `島嶼數量 +1 (目前: ${islandCount})`, `${i}-${j}`);
+                            
+                            pushState(i, j, LINES.CALL_DFS, `開始 DFS 擴展島嶼`, `${i}-${j}`);
+                            dfs(i, j);
+                        } else {
+                            // Visualize skipping water/visited
+                            pushState(i, j, LINES.CHECK_LAND, `[${i}, ${j}] 是水或已訪問，跳過`, `${i}-${j}`);
+                        }
+                    }
+                }
+
+                pushState(-1, -1, LINES.RETURN, `遍歷完成，總島嶼數：${islandCount}`);
+                return history;
+            }, []);
+
+            // Initialize or Reset
+            const initialize = (inputData = grid) => {
+                setIsPlaying(false);
+                setCurrentStep(0);
+                if (timerRef.current) clearInterval(timerRef.current);
+                
+                try {
+                    const history = generateSteps(inputData);
+                    setSteps(history);
+                    setError(null);
+                } catch (e) {
+                    console.error(e);
+                    setSteps([]);
+                    setError("演算法生成失敗，請檢查輸入格式。");
+                }
+            };
+
+            // Handle Input Changes
+            const handleInputChange = (e) => {
+                setGridInput(e.target.value);
+            };
+
+            const applyInput = () => {
+                try {
+                    const parsed = JSON.parse(gridInput);
+                    if (!Array.isArray(parsed) || !Array.isArray(parsed[0])) throw new Error("Invalid Grid");
+                    setGrid(parsed);
+                    initialize(parsed);
+                } catch (e) {
+                    setError("輸入格式錯誤：必須是二維 JSON 陣列 (例如 [['1','0'],...])");
+                }
+            };
+
+            const loadExample = (ex) => {
+                setGridInput(JSON.stringify(ex, null, 2));
+                setGrid(ex);
+                initialize(ex);
+            };
+
+            // Lifecycle: Init on mount
+            useEffect(() => {
+                initialize(EXAMPLE_1);
+            }, [generateSteps]);
+
+            // Playback Control
+            useEffect(() => {
+                if (isPlaying) {
+                    timerRef.current = setInterval(() => {
+                        setCurrentStep((prev) => {
+                            if (prev < steps.length - 1) return prev + 1;
+                            setIsPlaying(false);
+                            return prev;
+                        });
+                    }, playbackSpeed);
+                } else {
+                    clearInterval(timerRef.current);
+                }
+                return () => clearInterval(timerRef.current);
+            }, [isPlaying, steps.length, playbackSpeed]);
+
+            // Handlers
+            const nextStep = () => setCurrentStep(prev => Math.min(prev + 1, steps.length - 1));
+            const prevStep = () => setCurrentStep(prev => Math.max(prev - 1, 0));
+            const reset = () => {
+                setIsPlaying(false);
+                setCurrentStep(0);
+            };
+
+            // Render Helpers
+            const currentState = steps[currentStep] || { grid: grid, message: "準備就緒", line: 0, islandCount: 0 };
+            
+            const getCellColor = (val, r, c) => {
+                const isCurrent = currentState.activeId === `${r}-${c}`;
+                
+                if (isCurrent) return "bg-yellow-400 border-yellow-600 scale-105 shadow-lg ring-4 ring-yellow-200 z-10"; // Highlight active
+                if (val === '0') return "bg-blue-100 border-blue-200 text-blue-300"; // Water
+                if (val === '1') return "bg-emerald-500 border-emerald-600 text-white shadow-md"; // Unvisited Land
+                if (val === '2') return "bg-slate-400 border-slate-500 text-slate-200"; // Visited Land
+                return "bg-gray-200";
+            };
+
+            return (
+                <div className="flex flex-col h-screen bg-gray-50 text-slate-800 font-sans overflow-hidden">
+                
+                {/* Header */}
+                <header className="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center shadow-sm z-20">
+                    <div className="flex items-center gap-3">
+                    <div className="bg-emerald-600 p-2 rounded-lg">
+                        <IconMap className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                        <h1 className="text-xl font-bold text-slate-800">Number of Islands</h1>
+                        <p className="text-xs text-slate-500">LeetCode 200 - DFS Visualization</p>
+                    </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-4">
+                        <div className="flex bg-gray-100 rounded-lg p-1">
+                            <button onClick={() => loadExample(EXAMPLE_1)} className="px-3 py-1 text-sm hover:bg-white rounded-md transition-all">範例 1</button>
+                            <button onClick={() => loadExample(EXAMPLE_2)} className="px-3 py-1 text-sm hover:bg-white rounded-md transition-all">範例 2</button>
+                        </div>
+                        <div className="text-right">
+                            <span className="block text-2xl font-mono font-bold text-emerald-600">{currentState.islandCount}</span>
+                            <span className="text-xs text-gray-400 uppercase tracking-wider">Islands Found</span>
+                        </div>
+                    </div>
+                </header>
+
+                {/* Main Content */}
+                <div className="flex-1 flex overflow-hidden">
+                    
+                    {/* Left: Visualization & Controls */}
+                    <div className="flex-1 flex flex-col p-6 overflow-y-auto">
+                    
+                    {/* Grid Container */}
+                    <div className="flex-1 flex flex-col items-center justify-center min-h-[400px] relative bg-white rounded-xl shadow-sm border border-gray-200 p-8 mb-6">
+                        
+                        {/* Status Bar inside Grid View */}
+                        <div className="absolute top-4 left-4 right-4 flex justify-between items-start pointer-events-none">
+                            <div className="bg-slate-800/90 text-white px-4 py-2 rounded-full backdrop-blur-sm shadow-lg text-sm transition-all duration-300">
+                            {currentState.message}
+                            </div>
+                        </div>
+
+                        {error ? (
+                        <div className="text-red-500 bg-red-50 p-4 rounded-lg border border-red-200">
+                            {error}
+                        </div>
+                        ) : (
+                        <div 
+                            className="grid gap-2 transition-all duration-500"
+                            style={{ 
+                            gridTemplateColumns: `repeat(${currentState.grid[0].length}, minmax(0, 1fr))`,
+                            width: 'fit-content'
+                            }}
+                        >
+                            {currentState.grid.map((row, r) => (
+                            row.map((cell, c) => (
+                                <div 
+                                key={`${r}-${c}`}
+                                className={`
+                                    w-16 h-16 md:w-20 md:h-20 flex items-center justify-center 
+                                    text-2xl font-bold rounded-xl border-2 cell-transition transform
+                                    ${getCellColor(cell, r, c)}
+                                `}
+                                >
+                                {cell === '1' ? '1' : cell === '2' ? '✓' : ''}
+                                <span className="absolute top-1 left-1 text-[10px] opacity-40 font-mono text-black">
+                                    {r},{c}
+                                </span>
+                                </div>
+                            ))
+                            ))}
+                        </div>
+                        )}
+                        
+                        {/* Legend */}
+                        <div className="absolute bottom-4 right-4 flex gap-4 text-xs bg-white/80 p-2 rounded-lg backdrop-blur-sm border border-gray-100">
+                            <div className="flex items-center gap-1"><div className="w-3 h-3 bg-emerald-500 rounded-sm"></div>陸地</div>
+                            <div className="flex items-center gap-1"><div className="w-3 h-3 bg-blue-100 border border-blue-200 rounded-sm"></div>水</div>
+                            <div className="flex items-center gap-1"><div className="w-3 h-3 bg-slate-400 rounded-sm"></div>已訪問</div>
+                            <div className="flex items-center gap-1"><div className="w-3 h-3 bg-yellow-400 rounded-sm border border-yellow-600"></div>當前位置</div>
+                        </div>
+                    </div>
+
+                    {/* Controls Area */}
+                    <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-200">
+                        
+                        {/* Timeline Slider */}
+                        <div className="mb-4 flex items-center gap-4">
+                            <span className="text-xs font-mono text-gray-400 w-12">STEP</span>
+                            <input 
+                                type="range" 
+                                min="0" 
+                                max={steps.length - 1} 
+                                value={currentStep} 
+                                onChange={(e) => {
+                                    setIsPlaying(false);
+                                    setCurrentStep(Number(e.target.value));
+                                }}
+                                className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-emerald-600"
+                            />
+                            <span className="text-xs font-mono text-gray-500 w-16 text-right">
+                                {currentStep} / {steps.length - 1}
+                            </span>
+                        </div>
+
+                        <div className="flex justify-between items-center">
+                            {/* Input Toggle / Setting (Hidden for simplicity, keeping raw input below) */}
+                            <div className="flex gap-2">
+                                <button 
+                                    className="p-2 rounded-full hover:bg-gray-100 text-slate-600 transition-colors"
+                                    title="Reset"
+                                    onClick={reset}
+                                >
+                                    <IconRotateCcw className="w-5 h-5" />
+                                </button>
+                            </div>
+
+                            {/* Playback Buttons */}
+                            <div className="flex gap-2 items-center">
+                                <button onClick={prevStep} disabled={currentStep === 0} className="p-2 rounded-full hover:bg-gray-100 text-slate-600 disabled:opacity-30">
+                                    <IconChevronLeft className="w-6 h-6" />
+                                </button>
+                                
+                                <button 
+                                    onClick={() => setIsPlaying(!isPlaying)} 
+                                    className={`
+                                        w-12 h-12 flex items-center justify-center rounded-full text-white shadow-lg transition-transform hover:scale-105 active:scale-95
+                                        ${isPlaying ? 'bg-amber-500' : 'bg-emerald-600'}
+                                    `}
+                                >
+                                    {isPlaying ? <IconPause className="w-5 h-5 fill-current" /> : <IconPlay className="w-5 h-5 fill-current ml-1" />}
+                                </button>
+
+                                <button onClick={nextStep} disabled={currentStep >= steps.length - 1} className="p-2 rounded-full hover:bg-gray-100 text-slate-600 disabled:opacity-30">
+                                    <IconChevronRight className="w-6 h-6" />
+                                </button>
+                            </div>
+
+                            {/* Speed Control */}
+                            <div className="flex items-center gap-2">
+                                <IconSettings className="w-4 h-4 text-gray-400" />
+                                <select 
+                                    value={playbackSpeed} 
+                                    onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
+                                    className="text-xs border-none bg-gray-100 rounded-md py-1 px-2 text-slate-600 focus:ring-0"
+                                >
+                                    <option value={1000}>慢速</option>
+                                    <option value={500}>正常</option>
+                                    <option value={100}>快速</option>
+                                    <option value={10}>極速</option>
+                                </select>
+                            </div>
+                        </div>
+
+                    </div>
+                    
+                    {/* Raw Input Section (Collapsible details) */}
+                    <details className="mt-4 group">
+                        <summary className="cursor-pointer text-xs font-bold text-gray-400 hover:text-emerald-600 transition-colors list-none flex items-center gap-2">
+                        <span className="group-open:rotate-90 transition-transform">▶</span> 自定義數據輸入
+                        </summary>
+                        <div className="mt-2 p-4 bg-white border border-gray-200 rounded-lg">
+                            <textarea 
+                                value={gridInput}
+                                onChange={handleInputChange}
+                                className="w-full h-32 font-mono text-xs p-2 border border-gray-300 rounded focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                            />
+                            <button 
+                                onClick={applyInput}
+                                className="mt-2 w-full bg-slate-800 text-white text-xs py-2 rounded hover:bg-slate-700 transition-colors"
+                            >
+                                應用並重置
+                            </button>
+                        </div>
+                    </details>
+
+                    </div>
+
+                    {/* Right: Code Walkthrough */}
+                    <div className="w-[400px] bg-slate-900 text-slate-300 flex flex-col border-l border-slate-700 shadow-2xl z-10 hidden lg:flex">
+                    <div className="p-4 border-b border-slate-700 flex items-center gap-2 bg-slate-800">
+                        <IconCode className="w-4 h-4 text-emerald-400" />
+                        <span className="font-mono text-sm font-bold text-white">Solution.cpp</span>
+                    </div>
+                    
+                    <div className="flex-1 overflow-auto p-4 font-mono text-xs leading-5 custom-scrollbar">
+                        {C_CODE.split('\n').map((lineText, idx) => {
+                            const lineNum = idx + 1;
+                            let isHighlighted = false;
+                            if (currentState.line === lineNum) isHighlighted = true;
+                            
+                            if (currentState.line === LINES.DFS_RECURSE && lineNum >= 11 && lineNum <= 14) {
+                                isHighlighted = true;
+                            }
+
+                            return (
+                                <div 
+                                    key={idx} 
+                                    id={`code-line-${lineNum}`}
+                                    className={`
+                                        relative px-2 py-0.5 rounded transition-colors duration-200 flex
+                                        ${isHighlighted ? 'bg-yellow-500/20 text-yellow-200 font-bold border-l-2 border-yellow-500' : 'hover:bg-slate-800'}
+                                    `}
+                                >
+                                    <span className="w-6 inline-block text-slate-600 select-none text-right mr-3">{lineNum}</span>
+                                    <span className="whitespace-pre">{lineText}</span>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* Logic Explainer / Stack Trace Mockup */}
+                    <div className="h-1/3 bg-slate-800 border-t border-slate-700 p-4 flex flex-col">
+                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Algorithm State</h3>
+                        <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                            <div className="flex justify-between text-xs border-b border-slate-700 pb-1">
+                                <span className="text-slate-400">Current Pos:</span>
+                                <span className="font-mono text-emerald-400">
+                                    {currentState.activeId ? `[${currentState.activeId.replace('-', ', ')}]` : 'N/A'}
+                                </span>
+                            </div>
+                            <div className="flex justify-between text-xs border-b border-slate-700 pb-1">
+                                <span className="text-slate-400">Status:</span>
+                                <span className={`font-mono ${currentState.line === LINES.DFS_CHECK ? 'text-blue-300' : 'text-slate-200'}`}>
+                                    {currentState.line === LINES.MAIN_LOOP ? 'Scanning Grid' : 'DFS Recursion'}
+                                </span>
+                            </div>
+                            <div className="text-xs text-slate-400 mt-2">
+                                <span className="block mb-1">Log:</span>
+                                <p className="text-slate-300 bg-slate-900/50 p-2 rounded border border-slate-700/50">
+                                    {currentState.message}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    </div>
+                </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<NumberOfIslandsVisualizer />);
+    </script>
+</body>
+</html>

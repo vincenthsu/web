@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>0/1 背包問題視覺化 (0/1 Knapsack Visualizer)</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        /* Custom scrollbar for better look */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        @keyframes fade-in {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+            animation: fade-in 0.3s ease-out forwards;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 font-sans">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // --- React Hooks & Utils ---
+        const { useState, useEffect, useRef, useMemo } = React;
+
+        // --- Icons (Inline SVGs to replace lucide-react) ---
+        const Icon = ({ children, size = 20, className = "" }) => (
+            <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width={size}
+                height={size}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className={className}
+            >
+                {children}
+            </svg>
+        );
+
+        const Play = (props) => <Icon {...props}><polygon points="5 3 19 12 5 21 5 3"></polygon></Icon>;
+        const Pause = (props) => <Icon {...props}><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></Icon>;
+        const SkipBack = (props) => <Icon {...props}><polygon points="19 20 9 12 19 4 19 20"></polygon><line x1="5" y1="19" x2="5" y2="5"></line></Icon>;
+        const SkipForward = (props) => <Icon {...props}><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19"></line></Icon>;
+        const RotateCcw = (props) => <Icon {...props}><path d="M1 4v6h6"></path><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></Icon>;
+        const Plus = (props) => <Icon {...props}><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></Icon>;
+        const Trash2 = (props) => <Icon {...props}><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></Icon>;
+        const Info = (props) => <Icon {...props}><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></Icon>;
+
+        // --- Constants & Types ---
+        const MAX_CAPACITY_LIMIT = 10;
+        const MAX_ITEMS_LIMIT = 6;
+
+        const INITIAL_ITEMS = [
+            { id: 1, weight: 2, value: 3, name: '吉他' },
+            { id: 2, weight: 3, value: 4, name: '音響' },
+            { id: 3, weight: 4, value: 5, name: '筆電' },
+        ];
+
+        const INITIAL_CAPACITY = 5;
+
+        const CPP_CODE = [
+            { id: 1, text: 'for (int i = 1; i <= n; ++i) {' },
+            { id: 2, text: '  for (int w = 0; w <= W; ++w) {' },
+            { id: 3, text: '    if (weights[i-1] <= w) {' },
+            { id: 4, text: '      int exclude = dp[i-1][w];' },
+            { id: 5, text: '      int include = val[i-1] + dp[i-1][w - weights[i-1]];' },
+            { id: 6, text: '      dp[i][w] = max(exclude, include);' },
+            { id: 7, text: '    } else {' },
+            { id: 8, text: '      dp[i][w] = dp[i-1][w];' },
+            { id: 9, text: '    }' },
+            { id: 10, text: '  }' },
+            { id: 11, text: '}' }
+        ];
+
+        // --- Helper: Deep Copy 2D Array ---
+        const copyGrid = (grid) => grid.map(row => [...row]);
+
+        // --- Main Component ---
+        function KnapsackVisualizer() {
+            // --- State ---
+            const [capacity, setCapacity] = useState(INITIAL_CAPACITY);
+            const [items, setItems] = useState(INITIAL_ITEMS);
+            const [steps, setSteps] = useState([]);
+            const [currentStepIndex, setCurrentStepIndex] = useState(0);
+            const [isPlaying, setIsPlaying] = useState(false);
+            const [playbackSpeed, setPlaybackSpeed] = useState(1000); // ms
+
+            // Timer ref for auto-play
+            const timerRef = useRef(null);
+
+            // --- Logic: Generate Visualization Steps ---
+            useEffect(() => {
+                generateSteps();
+                setCurrentStepIndex(0);
+                setIsPlaying(false);
+            }, [items, capacity]);
+
+            const generateSteps = () => {
+                const n = items.length;
+                let dp = Array(n + 1).fill(0).map(() => Array(capacity + 1).fill(0));
+
+                const newSteps = [];
+
+                // Initial state step
+                newSteps.push({
+                    dp: copyGrid(dp),
+                    highlight: { i: null, w: null, sources: [] },
+                    description: "初始化 DP 表格，所有值設為 0。",
+                    codeLine: 1
+                });
+
+                for (let i = 1; i <= n; i++) {
+                    const currentItem = items[i - 1];
+                    const wItem = currentItem.weight;
+                    const vItem = currentItem.value;
+
+                    for (let w = 0; w <= capacity; w++) {
+                        // Step: Start considering cell [i][w]
+                        newSteps.push({
+                            dp: copyGrid(dp),
+                            highlight: { i, w, sources: [] },
+                            description: `正在計算：物品 ${i} (${currentItem.name})，背包容量 ${w}`,
+                            codeLine: 2
+                        });
+
+                        // Step: Check weight
+                        newSteps.push({
+                            dp: copyGrid(dp),
+                            highlight: { i, w, sources: [] },
+                            description: `檢查重量：物品重 ${wItem} <= 當前容量 ${w} ?`,
+                            codeLine: 3
+                        });
+
+                        if (wItem <= w) {
+                            // Can pick
+                            const excludeVal = dp[i - 1][w];
+                            const includeBaseIndex = w - wItem;
+                            const includeBaseVal = dp[i - 1][includeBaseIndex];
+                            const includeVal = vItem + includeBaseVal;
+
+                            // Step: Highlight comparison sources
+                            newSteps.push({
+                                dp: copyGrid(dp),
+                                highlight: {
+                                    i, w,
+                                    sources: [
+                                        { r: i - 1, c: w, color: 'bg-red-200 border-red-500', label: '不拿' },
+                                        { r: i - 1, c: includeBaseIndex, color: 'bg-green-200 border-green-500', label: `剩餘空間價值` }
+                                    ]
+                                },
+                                description: `比較：不拿 (${excludeVal}) vs 拿 (價值 ${vItem} + 剩餘空間價值 ${includeBaseVal} = ${includeVal})`,
+                                codeLine: 4
+                            });
+
+                            // Max value step
+                            newSteps.push({
+                                dp: copyGrid(dp),
+                                highlight: {
+                                    i, w,
+                                    sources: [
+                                        { r: i - 1, c: w, color: 'bg-red-200 border-red-500', label: '不拿' },
+                                        { r: i - 1, c: includeBaseIndex, color: 'bg-green-200 border-green-500', label: `剩餘空間` }
+                                    ]
+                                },
+                                description: `取最大值: max(${excludeVal}, ${includeVal})`,
+                                codeLine: 6
+                            });
+
+                            dp[i][w] = Math.max(excludeVal, includeVal);
+                        } else {
+                            // Cannot pick
+                            const excludeVal = dp[i - 1][w];
+
+                            newSteps.push({
+                                dp: copyGrid(dp),
+                                highlight: {
+                                    i, w,
+                                    sources: [
+                                        { r: i - 1, c: w, color: 'bg-red-200 border-red-500', label: '裝不下，繼承上方' }
+                                    ]
+                                },
+                                description: `物品太重 (${wItem} > ${w})，只能選擇不拿，繼承上方價值。`,
+                                codeLine: 7
+                            });
+
+                            newSteps.push({
+                                dp: copyGrid(dp),
+                                highlight: {
+                                    i, w,
+                                    sources: [
+                                        { r: i - 1, c: w, color: 'bg-red-200 border-red-500', label: '繼承' }
+                                    ]
+                                },
+                                description: `填入價值: ${excludeVal}`,
+                                codeLine: 8
+                            });
+
+                            dp[i][w] = excludeVal;
+                        }
+
+                        // Finalize cell update
+                        newSteps.push({
+                            dp: copyGrid(dp),
+                            highlight: { i, w, sources: [], updated: true },
+                            description: `單元格 [${i}][${w}] 更新完畢：${dp[i][w]}`,
+                            codeLine: wItem <= w ? 6 : 8
+                        });
+                    }
+                }
+
+                // Finished
+                newSteps.push({
+                    dp: copyGrid(dp),
+                    highlight: { i: null, w: null, sources: [] },
+                    description: "計算完成！右下角即為最大價值。",
+                    codeLine: null
+                });
+
+                setSteps(newSteps);
+            };
+
+            // --- Playback Controls ---
+            useEffect(() => {
+                if (isPlaying) {
+                    timerRef.current = setInterval(() => {
+                        setCurrentStepIndex((prev) => {
+                            if (prev < steps.length - 1) return prev + 1;
+                            setIsPlaying(false);
+                            return prev;
+                        });
+                    }, playbackSpeed);
+                } else {
+                    clearInterval(timerRef.current);
+                }
+                return () => clearInterval(timerRef.current);
+            }, [isPlaying, steps.length, playbackSpeed]);
+
+            const handleNext = () => {
+                if (currentStepIndex < steps.length - 1) {
+                    setCurrentStepIndex(currentStepIndex + 1);
+                    setIsPlaying(false);
+                }
+            };
+
+            const handlePrev = () => {
+                if (currentStepIndex > 0) {
+                    setCurrentStepIndex(currentStepIndex - 1);
+                    setIsPlaying(false);
+                }
+            };
+
+            const handleReset = () => {
+                setCurrentStepIndex(0);
+                setIsPlaying(false);
+            };
+
+            // --- Input Handlers ---
+            const handleAddItem = () => {
+                if (items.length >= MAX_ITEMS_LIMIT) return;
+                const newId = items.length > 0 ? Math.max(...items.map(i => i.id)) + 1 : 1;
+                setItems([...items, { id: newId, weight: 1, value: 1, name: `物品 ${newId}` }]);
+            };
+
+            const handleRemoveItem = (id) => {
+                setItems(items.filter(i => i.id !== id));
+            };
+
+            const handleUpdateItem = (id, field, val) => {
+                setItems(items.map(i => i.id === id ? { ...i, [field]: val } : i));
+            };
+
+            // --- Render Helpers ---
+            const currentStep = steps[currentStepIndex] || {
+                dp: [],
+                highlight: { sources: [] },
+                description: '',
+                codeLine: null
+            };
+
+            const { dp, highlight, description, codeLine } = currentStep;
+
+            const getCellStyles = (r, c) => {
+                let styles = "w-12 h-12 flex items-center justify-center border border-slate-200 text-sm font-medium transition-colors duration-300 ";
+
+                if (r === highlight.i && c === highlight.w) {
+                    styles += "bg-blue-500 text-white shadow-lg scale-105 z-10 border-blue-600 ring-2 ring-blue-300 ";
+                } else if (r === 0 || c === 0) {
+                    styles += "bg-slate-50 text-slate-400 ";
+                } else {
+                    styles += "bg-white text-slate-700 ";
+                }
+
+                const source = highlight.sources?.find(s => s.r === r && s.c === c);
+                if (source) {
+                    styles += `${source.color} text-slate-800 `;
+                }
+
+                return styles;
+            };
+
+            return (
+                <div className="min-h-screen bg-slate-50 p-4 font-sans text-slate-900">
+                    <header className="mb-6 text-center">
+                        <h1 className="text-3xl font-bold text-indigo-700 flex items-center justify-center gap-2">
+                            0/1 背包問題視覺化
+                        </h1>
+                        <p className="text-slate-500 mt-2">Dynamic Programming Algorithm Visualization (Standalone)</p>
+                    </header>
+
+                    <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+                        {/* --- Left Column: Controls & Input --- */}
+                        <div className="lg:col-span-3 space-y-6">
+
+                            {/* Controls */}
+                            <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h2 className="font-semibold text-lg text-slate-700">控制面板</h2>
+                                    <span className="text-xs font-mono bg-slate-100 px-2 py-1 rounded text-slate-500">
+                                        Step: {currentStepIndex} / {steps.length - 1}
+                                    </span>
+                                </div>
+
+                                <div className="flex justify-center gap-2 mb-4">
+                                    <button onClick={handleReset} className="p-2 hover:bg-slate-100 rounded text-slate-600" title="重置">
+                                        <RotateCcw size={20} />
+                                    </button>
+                                    <button onClick={handlePrev} disabled={currentStepIndex === 0} className="p-2 hover:bg-slate-100 rounded text-slate-600 disabled:opacity-30" title="上一步">
+                                        <SkipBack size={20} />
+                                    </button>
+                                    <button onClick={() => setIsPlaying(!isPlaying)} className={`p-2 rounded text-white shadow-sm transition ${isPlaying ? 'bg-orange-500 hover:bg-orange-600' : 'bg-indigo-600 hover:bg-indigo-700'}`} title={isPlaying ? "暫停" : "自動播放"}>
+                                        {isPlaying ? <Pause size={20} /> : <Play size={20} />}
+                                    </button>
+                                    <button onClick={handleNext} disabled={currentStepIndex === steps.length - 1} className="p-2 hover:bg-slate-100 rounded text-slate-600 disabled:opacity-30" title="下一步">
+                                        <SkipForward size={20} />
+                                    </button>
+                                </div>
+
+                                <div className="flex items-center gap-2 text-xs text-slate-500">
+                                    <span>速度:</span>
+                                    <input
+                                        type="range"
+                                        min="100"
+                                        max="2000"
+                                        step="100"
+                                        value={2100 - playbackSpeed}
+                                        onChange={(e) => setPlaybackSpeed(2100 - Number(e.target.value))}
+                                        className="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer"
+                                    />
+                                    <span>{(2100 - playbackSpeed)/100}x</span>
+                                </div>
+                            </div>
+
+                            {/* Inputs */}
+                            <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                                <h2 className="font-semibold text-lg text-slate-700 mb-4">數據輸入</h2>
+
+                                <div className="mb-4">
+                                    <label className="block text-sm font-medium text-slate-600 mb-1">背包最大承重 (W)</label>
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="range"
+                                            min="3"
+                                            max={MAX_CAPACITY_LIMIT}
+                                            value={capacity}
+                                            onChange={(e) => setCapacity(Number(e.target.value))}
+                                            className="w-full"
+                                        />
+                                        <span className="font-mono font-bold text-indigo-600 w-8 text-center">{capacity}</span>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <div className="flex justify-between items-center">
+                                        <label className="block text-sm font-medium text-slate-600">物品列表 (權重 | 價值)</label>
+                                        <button
+                                            onClick={handleAddItem}
+                                            disabled={items.length >= MAX_ITEMS_LIMIT}
+                                            className="text-xs flex items-center gap-1 bg-indigo-50 text-indigo-600 px-2 py-1 rounded hover:bg-indigo-100 disabled:opacity-50"
+                                        >
+                                            <Plus size={12} /> 新增
+                                        </button>
+                                    </div>
+
+                                    <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                                        {items.map((item, idx) => (
+                                            <div key={item.id} className={`flex items-center gap-2 p-2 rounded border ${highlight.i === idx + 1 ? 'border-blue-400 bg-blue-50 ring-1 ring-blue-200' : 'border-slate-100 bg-slate-50'}`}>
+                                                <div className="w-6 h-6 flex items-center justify-center bg-slate-200 rounded-full text-xs font-bold text-slate-600">
+                                                    {idx + 1}
+                                                </div>
+                                                <div className="flex-1 grid grid-cols-2 gap-2">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[10px] text-slate-400">重量</span>
+                                                        <input
+                                                            type="number"
+                                                            min="1"
+                                                            max={MAX_CAPACITY_LIMIT}
+                                                            value={item.weight}
+                                                            onChange={(e) => handleUpdateItem(item.id, 'weight', parseInt(e.target.value) || 1)}
+                                                            className="w-full text-xs p-1 border rounded"
+                                                        />
+                                                    </div>
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[10px] text-slate-400">價值</span>
+                                                        <input
+                                                            type="number"
+                                                            min="1"
+                                                            value={item.value}
+                                                            onChange={(e) => handleUpdateItem(item.id, 'value', parseInt(e.target.value) || 0)}
+                                                            className="w-full text-xs p-1 border rounded"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <button onClick={() => handleRemoveItem(item.id)} className="text-slate-400 hover:text-red-500">
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {items.length === 0 && <p className="text-xs text-center text-slate-400 py-4">請新增物品</p>}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* --- Middle: Visualization Grid --- */}
+                        <div className="lg:col-span-6 flex flex-col gap-6">
+
+                            <div className="bg-indigo-600 text-white p-4 rounded-xl shadow-md min-h-[80px] flex items-center justify-center text-center transition-all duration-300">
+                                <p className="text-lg font-medium animate-fade-in">
+                                    {description}
+                                </p>
+                            </div>
+
+                            <div className="flex-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 overflow-x-auto">
+                                <div className="inline-block min-w-full">
+                                    <div className="flex">
+                                        <div className="w-24 shrink-0 p-2 font-bold text-slate-400 text-right text-sm">
+                                            物品 \ 容量
+                                        </div>
+                                        {Array.from({ length: capacity + 1 }).map((_, w) => (
+                                            <div key={`head-${w}`} className={`w-12 shrink-0 flex items-center justify-center font-bold text-sm text-slate-500 mb-2 ${highlight.w === w ? 'text-blue-600 scale-110' : ''}`}>
+                                                {w}
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {dp.map((row, i) => {
+                                        const item = i > 0 ? items[i-1] : null;
+                                        const isCurrentRow = highlight.i === i;
+
+                                        return (
+                                            <div key={`row-${i}`} className="flex mb-1">
+                                                <div className={`w-24 shrink-0 flex flex-col justify-center items-end pr-3 py-1 border-r-2 ${isCurrentRow ? 'border-blue-500 bg-blue-50' : 'border-slate-100'}`}>
+                                                    {i === 0 ? (
+                                                        <span className="text-xs text-slate-400">初始狀態</span>
+                                                    ) : (
+                                                        <>
+                                                            <span className={`text-sm font-bold ${isCurrentRow ? 'text-blue-700' : 'text-slate-700'}`}>
+                                                                #{i} {item?.name}
+                                                            </span>
+                                                            <span className="text-[10px] text-slate-400 font-mono">
+                                                                w:{item?.weight}, v:{item?.value}
+                                                            </span>
+                                                        </>
+                                                    )}
+                                                </div>
+
+                                                {row.map((val, w) => (
+                                                    <div key={`cell-${i}-${w}`} className={getCellStyles(i, w)}>
+                                                        {val}
+                                                        {highlight.sources?.find(s => s.r === i && s.c === w) && (
+                                                            <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[9px] px-1 py-0.5 rounded opacity-90 whitespace-nowrap z-20 pointer-events-none">
+                                                                {highlight.sources.find(s => s.r === i && s.c === w).label}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            <div className="flex flex-wrap gap-4 text-xs text-slate-600 justify-center">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-4 h-4 bg-blue-500 border border-blue-600 rounded"></div>
+                                    <span>當前計算位置</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <div className="w-4 h-4 bg-red-200 border border-red-500 rounded"></div>
+                                    <span>不拿 (繼承上方)</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <div className="w-4 h-4 bg-green-200 border border-green-500 rounded"></div>
+                                    <span>拿 (當前價值 + 剩餘空間最佳解)</span>
+                                </div>
+                            </div>
+
+                        </div>
+
+                        {/* --- Right Column: Logic --- */}
+                        <div className="lg:col-span-3">
+                            <div className="bg-slate-900 rounded-xl shadow-lg p-4 text-slate-300 font-mono text-xs overflow-hidden h-full">
+                                <div className="flex items-center gap-2 mb-4 border-b border-slate-700 pb-2">
+                                    <Info size={16} className="text-blue-400"/>
+                                    <span className="font-bold text-slate-100">C++ 實作範例</span>
+                                </div>
+
+                                <div className="space-y-1 font-mono">
+                                    {CPP_CODE.map((line) => (
+                                        <div
+                                            key={line.id}
+                                            className={`px-2 py-1.5 rounded transition-all duration-300 ${
+                                                codeLine === line.id
+                                                    ? 'bg-blue-900/50 text-blue-200 border-l-4 border-blue-400 pl-3'
+                                                    : 'opacity-70 hover:opacity-100'
+                                            }`}
+                                        >
+                                            <pre className="whitespace-pre-wrap">{line.text}</pre>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <div className="mt-6 p-3 bg-slate-800 rounded border border-slate-700">
+                                    <h4 className="font-bold text-slate-200 mb-2">當前狀態變數:</h4>
+                                    <ul className="space-y-1 text-slate-400">
+                                        <li>Item Index (i): <span className="text-green-400">{highlight.i !== null ? highlight.i : '-'}</span></li>
+                                        <li>Capacity (w): <span className="text-orange-400">{highlight.w !== null ? highlight.w : '-'}</span></li>
+                                        <li>Weight: <span className="text-blue-400">{highlight.i ? items[highlight.i-1]?.weight : '-'}</span></li>
+                                        <li>Value: <span className="text-purple-400">{highlight.i ? items[highlight.i-1]?.value : '-'}</span></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<KnapsackVisualizer />);
+    </script>
+</body>
+</html>

@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>回溯演算法視覺化 (Backtracking Visualization)</title>
+
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #0f172a;
+            color: white;
+        }
+        .cell {
+            transition: all 0.2s ease;
+        }
+        /* Custom scrollbar */
+        .custom-scroll::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        .custom-scroll::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+        .code-line {
+            transition: background-color 0.2s;
+        }
+        .shake {
+            animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+        }
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-1px, 0, 0); }
+            20%, 80% { transform: translate3d(2px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+            40%, 60% { transform: translate3d(4px, 0, 0); }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useCallback } = React;
+
+        // --- Constants & Data ---
+
+        // Icons
+        const QueenIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="60%" height="60%" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-yellow-400 drop-shadow-md">
+                <path d="M9 14c-1.1 0-2 .9-2 2v2h10v-2c0-1.1-.9-2-2-2m-8 0c-.6 0-1-.4-1-1v-1.2l-2.5-3.5c-.2-.3-.1-.8.2-1l.8-.5c.3-.2.8-.1 1 .2L7 11h10l2.5-3.8c.2-.3.7-.4 1-.2l.8.5c.3.2.4.7.2 1L19 12v1c0 .6-.4 1-1 1M9 14h6"/>
+            </svg>
+        );
+
+        const CODE_SNIPPETS = {
+            nqueens: [
+                `bool solve(int row) {`,
+                `    if (row == N) // 找到解法`,
+                `        return true;`,
+                ``,
+                `    for (int col = 0; col < N; col++) {`,
+                `        if (isValid(row, col)) { // 檢查是否安全`,
+                `            board[row][col] = 1; // 放置皇后`,
+                ``,
+                `            if (solve(row + 1)) // 遞迴下一列`,
+                `                return true;`,
+                ``,
+                `            board[row][col] = 0; // 回溯 (Backtrack)`,
+                `        }`,
+                `    }`,
+                `    return false; // 此路不通`,
+                `}`
+            ],
+            permutations: [
+                `void permute(int index) {`,
+                `    if (index == N) { // Base Case: 填滿`,
+                `        printSolution();`,
+                `        return;`,
+                `    }`,
+                `    for (int i = 1; i <= N; i++) {`,
+                `        if (!used[i]) { // 檢查是否可用`,
+                `            res[index] = i; // 放置數字`,
+                `            used[i] = true; // 標記為已用`,
+                ``,
+                `            permute(index + 1); // 遞迴`,
+                ``,
+                `            used[i] = false; // 回溯 (Backtrack)`,
+                `            res[index] = 0;`,
+                `        }`,
+                `    }`,
+                `}`
+            ]
+        };
+
+        // --- Logic Generators ---
+
+        function* solveNQueens(n) {
+            let board = Array(n).fill().map(() => Array(n).fill(0));
+            // 0: Empty, 1: Queen, 2: Checking, 3: Conflict
+
+            yield { type: 'nqueens', board: JSON.parse(JSON.stringify(board)), message: "演算法開始...", status: 'running', codeLine: 0 };
+
+            function isValid(board, row, col) {
+                for (let i = 0; i < row; i++) if (board[i][col] === 1) return false;
+                for (let i = row, j = col; i >= 0 && j >= 0; i--, j--) if (board[i][j] === 1) return false;
+                for (let i = row, j = col; i >= 0 && j < n; i--, j++) if (board[i][j] === 1) return false;
+                return true;
+            }
+
+            function* backtrack(row) {
+                yield {
+                    type: 'nqueens', board: JSON.parse(JSON.stringify(board)),
+                    message: `檢查是否到達第 ${n} 列 (Base Case)...`,
+                    activeRow: row, activeCol: -1, codeLine: 1
+                };
+
+                if (row === n) return true;
+
+                for (let col = 0; col < n; col++) {
+                    board[row][col] = 2; // Checking
+                    yield {
+                        type: 'nqueens', board: JSON.parse(JSON.stringify(board)),
+                        message: `檢查位置 [${row}, ${col}] 是否安全...`,
+                        activeRow: row, activeCol: col, codeLine: 5
+                    };
+
+                    if (isValid(board, row, col)) {
+                        board[row][col] = 1; // Place
+                        yield {
+                            type: 'nqueens', board: JSON.parse(JSON.stringify(board)),
+                            message: `位置 [${row}, ${col}] 安全，放置皇后。`,
+                            activeRow: row, activeCol: col, codeLine: 6
+                        };
+
+                        yield {
+                            type: 'nqueens', board: JSON.parse(JSON.stringify(board)),
+                            message: `遞迴呼叫：嘗試解決第 ${row + 1} 列...`,
+                            activeRow: row, activeCol: col, codeLine: 8
+                        };
+
+                        if (yield* backtrack(row + 1)) return true;
+
+                        board[row][col] = 0; // Backtrack
+                        yield {
+                            type: 'nqueens', board: JSON.parse(JSON.stringify(board)),
+                            message: `第 ${row + 1} 列無解，從 [${row}, ${col}] 回溯...`,
+                            status: 'backtracking', activeRow: row, activeCol: col, codeLine: 11
+                        };
+                    } else {
+                        board[row][col] = 3; // Conflict
+                        yield {
+                            type: 'nqueens', board: JSON.parse(JSON.stringify(board)),
+                            message: `位置 [${row}, ${col}] 衝突！嘗試下一個位置。`,
+                            status: 'conflict', activeRow: row, activeCol: col, codeLine: 5
+                        };
+                        board[row][col] = 0;
+                    }
+                }
+
+                yield {
+                    type: 'nqueens', board: JSON.parse(JSON.stringify(board)),
+                    message: `第 ${row} 列所有位置皆失敗，返回 False。`,
+                    activeRow: row, activeCol: -1, codeLine: 14
+                };
+                return false;
+            }
+
+            if (yield* backtrack(0)) {
+                yield { type: 'nqueens', board: JSON.parse(JSON.stringify(board)), message: "找到解法！", status: 'success', codeLine: 2 };
+            } else {
+                yield { type: 'nqueens', board: JSON.parse(JSON.stringify(board)), message: "無解。", status: 'failed', codeLine: 14 };
+            }
+        }
+
+        function* solvePermutations(n) {
+            let res = Array(n).fill(0);
+            let used = Array(n + 1).fill(false);
+
+            yield { type: 'permutations', res: [...res], used: [...used], message: "演算法開始：準備生成全排列", codeLine: 0 };
+
+            function* permute(index) {
+                // Base Case
+                yield {
+                    type: 'permutations', res: [...res], used: [...used],
+                    message: `檢查是否填滿所有位置 (Index ${index} == ${n})...`,
+                    activeIndex: index, codeLine: 1
+                };
+
+                if (index === n) {
+                    yield {
+                        type: 'permutations', res: [...res], used: [...used],
+                        message: `找到一組排列: [${res.join(', ')}]`,
+                        status: 'success_moment',
+                        activeIndex: index, codeLine: 2
+                    };
+                    return;
+                }
+
+                // Loop choices
+                for (let i = 1; i <= n; i++) {
+                    yield {
+                        type: 'permutations', res: [...res], used: [...used],
+                        message: `位置 ${index}: 考慮數字 ${i}...`,
+                        activeIndex: index, activeNum: i, codeLine: 6
+                    };
+
+                    if (!used[i]) {
+                        // Place
+                        res[index] = i;
+                        used[i] = true;
+
+                        yield {
+                            type: 'permutations', res: [...res], used: [...used],
+                            message: `數字 ${i} 可用。填入位置 ${index}，標記為已使用。`,
+                            activeIndex: index, activeNum: i, codeLine: 7 // Line numbers based on CODE_SNIPPETS
+                        };
+
+                        // Recurse
+                        yield {
+                            type: 'permutations', res: [...res], used: [...used],
+                            message: `遞迴：前往下一個位置 ${index + 1}...`,
+                            activeIndex: index, activeNum: i, codeLine: 10
+                        };
+
+                        yield* permute(index + 1);
+
+                        // Backtrack
+                        used[i] = false;
+                        res[index] = 0;
+
+                        yield {
+                            type: 'permutations', res: [...res], used: [...used],
+                            message: `回溯：從位置 ${index} 移除數字 ${i}，標記為未使用。`,
+                            status: 'backtracking',
+                            activeIndex: index, activeNum: i, codeLine: 12
+                        };
+
+                    } else {
+                         yield {
+                            type: 'permutations', res: [...res], used: [...used],
+                            message: `數字 ${i} 已被使用，跳過。`,
+                            status: 'conflict',
+                            activeIndex: index, activeNum: i, codeLine: 6
+                        };
+                    }
+                }
+            }
+
+            yield* permute(0);
+            yield { type: 'permutations', res: Array(n).fill(0), used: Array(n+1).fill(false), message: "全排列生成結束。", status: 'finished', codeLine: 16 };
+        }
+
+        // --- Visualizer Components ---
+
+        const NQueensBoard = ({ board, n }) => {
+            const getCellSizeClass = (n) => {
+                if (n <= 4) return "h-14 w-14 sm:h-16 sm:w-16";
+                if (n <= 6) return "h-10 w-10 sm:h-12 sm:w-12";
+                return "h-8 w-8 sm:h-10 sm:w-10";
+            };
+
+            const getCellColor = (val, row, col) => {
+                const isBlack = (row + col) % 2 === 1;
+                const baseClass = isBlack ? "bg-slate-700" : "bg-slate-600";
+
+                if (val === 1) return "bg-green-600 border-2 border-green-400";
+                if (val === 2) return "bg-blue-500 ring-4 ring-blue-300 z-10";
+                if (val === 3) return "bg-red-600 shake";
+                return baseClass;
+            };
+
+            return (
+                <div
+                    className="grid gap-1 bg-slate-900 p-2 rounded-lg border border-slate-700 shadow-inner"
+                    style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}
+                >
+                    {board.map((row, rIndex) => (
+                        row.map((cellVal, cIndex) => (
+                            <div
+                                key={`${rIndex}-${cIndex}`}
+                                className={`
+                                    ${getCellSizeClass(n)}
+                                    ${getCellColor(cellVal, rIndex, cIndex)}
+                                    cell rounded flex items-center justify-center text-xl relative
+                                `}
+                            >
+                                {cellVal === 1 && <QueenIcon />}
+                                {cellVal === 2 && <div className="w-3 h-3 bg-white rounded-full animate-ping absolute"></div>}
+                                {cellVal === 3 && <div className="text-white font-bold">X</div>}
+                            </div>
+                        ))
+                    ))}
+                </div>
+            );
+        };
+
+        const PermutationView = ({ res = [], used = [], n, activeIndex, activeNum }) => {
+            if (!res || !used) return null; // Safety guard
+
+            return (
+                <div className="flex flex-col items-center justify-center gap-8 py-8 w-full">
+                    {/* Result Array */}
+                    <div className="flex flex-col items-center gap-2">
+                        <span className="text-sm font-bold text-slate-400 uppercase tracking-wider">當前排列 (Result)</span>
+                        <div className="flex gap-2 p-4 bg-slate-900 rounded-xl border border-slate-700">
+                            {res.map((val, idx) => (
+                                <div key={idx} className="flex flex-col items-center gap-1">
+                                    <span className="text-xs text-slate-500 font-mono">[{idx}]</span>
+                                    <div
+                                        className={`
+                                            w-16 h-16 sm:w-20 sm:h-20 rounded-lg flex items-center justify-center text-3xl font-bold border-2 transition-all
+                                            ${idx === activeIndex ? 'border-blue-400 shadow-[0_0_15px_rgba(96,165,250,0.5)] scale-105' : 'border-slate-600 bg-slate-800'}
+                                            ${val !== 0 ? 'text-green-400' : 'text-slate-600'}
+                                        `}
+                                    >
+                                        {val !== 0 ? val : ''}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Arrow Indicator */}
+                    <div className="text-slate-600">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>
+                    </div>
+
+                    {/* Number Pool */}
+                    <div className="flex flex-col items-center gap-2">
+                        <span className="text-sm font-bold text-slate-400 uppercase tracking-wider">數字池 (1..N)</span>
+                        <div className="flex gap-3 p-3 bg-slate-800/50 rounded-lg border border-slate-700/50">
+                            {Array.from({length: n}, (_, i) => i + 1).map(num => {
+                                const isUsed = used[num];
+                                const isChecking = activeNum === num;
+                                return (
+                                    <div
+                                        key={num}
+                                        className={`
+                                            w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg border-2 transition-all
+                                            ${isChecking ? 'ring-4 ring-yellow-400/50 z-10 scale-110' : ''}
+                                            ${isUsed
+                                                ? 'bg-red-900/30 border-red-800 text-red-700 line-through decoration-2'
+                                                : 'bg-green-900/30 border-green-600 text-green-400 shadow-lg shadow-green-900/20'}
+                                        `}
+                                    >
+                                        {num}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Main App Component ---
+        const App = () => {
+            const [tab, setTab] = useState('nqueens'); // 'nqueens' | 'permutations'
+            const [n, setN] = useState(4);
+            const [visualState, setVisualState] = useState(null); // Generic state holder
+
+            const [isPlaying, setIsPlaying] = useState(false);
+            const [speed, setSpeed] = useState(500);
+            const [logs, setLogs] = useState([]);
+            const [finished, setFinished] = useState(false);
+            const [activeCodeLine, setActiveCodeLine] = useState(-1);
+
+            const generatorRef = useRef(null);
+            const timerRef = useRef(null);
+            const speedRef = useRef(speed);
+            const codeContainerRef = useRef(null);
+
+            // Defaults per tab
+            const TAB_CONFIG = {
+                nqueens: { min: 4, max: 8, default: 4, label: 'N-Queens (N皇后)' },
+                permutations: { min: 2, max: 4, default: 3, label: 'Full Permutations (全排列)' }
+            };
+
+            // Switch Tab Logic
+            const switchTab = (newTab) => {
+                if (newTab === tab) return;
+                setTab(newTab);
+                setN(TAB_CONFIG[newTab].default);
+                // Reset will happen via useEffect on N or Tab change
+            };
+
+            useEffect(() => {
+                reset();
+            }, [n, tab]);
+
+            useEffect(() => {
+                speedRef.current = speed;
+            }, [speed]);
+
+            useEffect(() => {
+                if (activeCodeLine !== -1 && codeContainerRef.current) {
+                    const lineEl = codeContainerRef.current.children[activeCodeLine];
+                    if (lineEl) lineEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }, [activeCodeLine]);
+
+            const reset = () => {
+                stopAnimation();
+                setLogs([]);
+                setFinished(false);
+                setActiveCodeLine(-1);
+                generatorRef.current = null;
+
+                // Init empty state
+                if (tab === 'nqueens') {
+                    setVisualState({
+                        type: 'nqueens',
+                        board: Array(n).fill().map(() => Array(n).fill(0)),
+                        message: "準備就緒"
+                    });
+                } else {
+                    setVisualState({
+                        type: 'permutations',
+                        res: Array(n).fill(0),
+                        used: Array(n+1).fill(false),
+                        message: "準備就緒"
+                    });
+                }
+            };
+
+            const stopAnimation = () => {
+                if (timerRef.current) clearTimeout(timerRef.current);
+                timerRef.current = null;
+                setIsPlaying(false);
+            };
+
+            const step = useCallback(() => {
+                if (!generatorRef.current) {
+                    if (tab === 'nqueens') generatorRef.current = solveNQueens(n);
+                    else generatorRef.current = solvePermutations(n);
+                }
+
+                const next = generatorRef.current.next();
+
+                if (!next.done) {
+                    const state = next.value;
+                    setVisualState(state);
+
+                    // Update Logs if message changed
+                    if (logs.length === 0 || logs[0] !== state.message) {
+                        setLogs(prev => [state.message, ...prev].slice(0, 50));
+                    }
+
+                    if (state.codeLine !== undefined) setActiveCodeLine(state.codeLine);
+
+                    if (state.status === 'success' || state.status === 'failed' || state.status === 'finished') {
+                        setFinished(true);
+                        stopAnimation();
+                    } else if (state.status === 'success_moment') {
+                         // Just a pause for moment of success in permutations, continue
+                         timerRef.current = setTimeout(step, speedRef.current * 2); // Pause longer on solution
+                    } else {
+                        timerRef.current = setTimeout(step, speedRef.current);
+                    }
+                } else {
+                    setFinished(true);
+                    stopAnimation();
+                }
+            }, [n, tab, logs]); // Added logs dependency to avoid stale state in setLogs, or better use functional update
+
+            const togglePlay = () => {
+                if (isPlaying) {
+                    stopAnimation();
+                } else {
+                    if (finished) reset(); // Auto reset if finished
+                    setIsPlaying(true);
+                    // Defer step slightly to allow state update if needed
+                    setTimeout(() => step(), 0);
+                }
+            };
+
+            return (
+                <div className="min-h-screen flex flex-col items-center justify-center p-4">
+
+                    <div className="text-center mb-4">
+                        <h1 className="text-3xl md:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500 mb-2">
+                            Backtracking 演算法視覺化
+                        </h1>
+                    </div>
+
+                    {/* Tab Navigation */}
+                    <div className="flex bg-slate-800 p-1 rounded-lg mb-6 border border-slate-700">
+                        {Object.entries(TAB_CONFIG).map(([key, config]) => (
+                            <button
+                                key={key}
+                                onClick={() => switchTab(key)}
+                                className={`
+                                    px-6 py-2 rounded-md font-bold text-sm transition-all
+                                    ${tab === key ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-700'}
+                                `}
+                            >
+                                {config.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    <div className="flex flex-col xl:flex-row gap-6 items-start w-full max-w-7xl">
+
+                        {/* 1. Left Column: Visualizer Area */}
+                        <div className="flex-1 w-full min-h-[400px] flex justify-center bg-slate-800/50 p-4 rounded-2xl shadow-xl border border-slate-700 backdrop-blur-sm order-1">
+                            {visualState && visualState.type === 'nqueens' && tab === 'nqueens' && (
+                                <div className="flex items-center justify-center w-full">
+                                    <NQueensBoard board={visualState.board} n={n} />
+                                </div>
+                            )}
+                            {visualState && visualState.type === 'permutations' && tab === 'permutations' && (
+                                <PermutationView
+                                    res={visualState.res}
+                                    used={visualState.used}
+                                    n={n}
+                                    activeIndex={visualState.activeIndex}
+                                    activeNum={visualState.activeNum}
+                                />
+                            )}
+                        </div>
+
+                        {/* 2. Middle Column: Code */}
+                        <div className="w-full xl:w-[450px] bg-[#1e293b] rounded-xl border border-slate-700 shadow-lg overflow-hidden flex flex-col order-3 xl:order-2 h-[500px] xl:h-[600px]">
+                            <div className="bg-slate-900 px-4 py-2 border-b border-slate-700 flex justify-between items-center">
+                                <span className="font-mono text-sm font-bold text-slate-300">
+                                    {tab === 'nqueens' ? 'solve_n_queens.c' : 'solve_permutations.c'}
+                                </span>
+                                <div className="flex gap-1.5">
+                                    <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                                    <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                                    <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                                </div>
+                            </div>
+                            <div ref={codeContainerRef} className="flex-1 overflow-y-auto p-4 custom-scroll font-mono text-sm leading-6">
+                                {CODE_SNIPPETS[tab].map((line, idx) => (
+                                    <div
+                                        key={idx}
+                                        className={`
+                                            flex code-line px-2 rounded
+                                            ${idx === activeCodeLine
+                                                ? 'bg-blue-900/60 border-l-4 border-blue-400 text-blue-100'
+                                                : 'text-slate-400 border-l-4 border-transparent'}
+                                        `}
+                                    >
+                                        <span className="w-8 select-none text-slate-600 text-right mr-4 text-xs pt-1">{idx + 1}</span>
+                                        <span className="whitespace-pre">{line}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* 3. Right Column: Controls & Log */}
+                        <div className="w-full xl:w-80 flex flex-col gap-4 order-2 xl:order-3">
+                            {/* Controls */}
+                            <div className="bg-slate-800 p-5 rounded-xl border border-slate-700 shadow-lg">
+                                <div className="mb-4">
+                                    <label className="block text-slate-400 text-xs uppercase tracking-wider mb-2 font-bold">
+                                        輸入大小 N ({TAB_CONFIG[tab].min} - {TAB_CONFIG[tab].max})
+                                    </label>
+                                    <div className="flex gap-2">
+                                        {Array.from(
+                                            { length: TAB_CONFIG[tab].max - TAB_CONFIG[tab].min + 1 },
+                                            (_, i) => i + TAB_CONFIG[tab].min
+                                        ).map(size => (
+                                            <button
+                                                key={size}
+                                                onClick={() => setN(size)}
+                                                disabled={isPlaying}
+                                                className={`
+                                                    flex-1 py-2 rounded text-sm font-semibold transition-colors
+                                                    ${n === size
+                                                        ? 'bg-blue-600 text-white shadow-lg'
+                                                        : 'bg-slate-700 text-slate-300 hover:bg-slate-600 disabled:opacity-50'}
+                                                `}
+                                            >
+                                                {size}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="mb-6">
+                                    <label className="block text-slate-400 text-xs uppercase tracking-wider mb-2 font-bold">速度 ({speed}ms)</label>
+                                    <input
+                                        type="range"
+                                        min="50" max="1000" step="50"
+                                        value={speed}
+                                        onChange={(e) => setSpeed(Number(e.target.value))}
+                                        className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                                        style={{direction: 'rtl'}}
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button
+                                        onClick={togglePlay}
+                                        className={`
+                                            py-3 rounded-lg font-bold text-white shadow-lg transition-transform active:scale-95
+                                            ${isPlaying
+                                                ? 'bg-yellow-600 hover:bg-yellow-500'
+                                                : finished ? 'bg-blue-600 hover:bg-blue-500' : 'bg-green-600 hover:bg-green-500'}
+                                        `}
+                                    >
+                                        {isPlaying ? "暫停" : finished ? "重播" : "開始"}
+                                    </button>
+                                    <button
+                                        onClick={reset}
+                                        className="bg-slate-700 hover:bg-slate-600 text-white py-3 rounded-lg font-bold shadow-lg transition-transform active:scale-95"
+                                    >
+                                        重置
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Logs */}
+                            <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-col h-64 shadow-lg">
+                                <div className="mb-2 pb-2 border-b border-slate-700">
+                                    <div className="text-xs text-slate-400 uppercase font-bold">狀態日誌</div>
+                                    <div className={`text-sm font-medium mt-1 truncate ${
+                                        (visualState?.message || "").includes("衝突") || (visualState?.message || "").includes("跳過") ? "text-red-400" :
+                                        (visualState?.message || "").includes("安全") || (visualState?.message || "").includes("找到") ? "text-green-400" :
+                                        (visualState?.message || "").includes("回溯") ? "text-yellow-400" : "text-blue-300"
+                                    }`}>
+                                        {visualState?.message || "..."}
+                                    </div>
+                                </div>
+                                <div className="flex-1 overflow-y-auto custom-scroll text-xs space-y-1">
+                                    {logs.map((log, idx) => (
+                                        <div key={idx} className="text-slate-500 border-l-2 border-slate-600 pl-2">
+                                            {log}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
