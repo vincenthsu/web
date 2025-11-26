@@ -84,9 +84,9 @@ jobs:
           for p in projects:
               html_content += f'''
               <li class='project-item'>
-                  <a class='project-link' href='{p["path"]}/'>
-                      <div class='project-title'>{p["title"]}</div>
-                      <div class='project-path'>📂 {p["path"]}</div>
+                  <a class='project-link' href='{p['path']}/'>
+                      <div class='project-title'>{p['title']}</div>
+                      <div class='project-path'>📂 {p['path']}</div>
                   </a>
               </li>
               '''
