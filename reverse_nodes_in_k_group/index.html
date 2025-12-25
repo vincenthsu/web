@@ -1,0 +1,792 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Linked List K 組反轉 視覺化</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg-1: #0c1f2e;
+        --bg-2: #0f2a3c;
+        --accent: #ffb703;
+        --accent-2: #8ecae6;
+        --ink: #f7f2e8;
+        --muted: rgba(247, 242, 232, 0.7);
+        --card: rgba(12, 31, 46, 0.7);
+        --line: rgba(142, 202, 230, 0.25);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Space Grotesk", system-ui, sans-serif;
+        color: var(--ink);
+        background: radial-gradient(1200px circle at 10% 10%, #17344a 0%, transparent 55%),
+          radial-gradient(900px circle at 85% 20%, #1d495f 0%, transparent 60%),
+          linear-gradient(140deg, var(--bg-1), var(--bg-2));
+        min-height: 100vh;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: minmax(280px, 1fr) minmax(320px, 1fr);
+        gap: 24px;
+        padding: 32px 5vw 56px;
+      }
+
+      header {
+        grid-column: 1 / -1;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(28px, 3.2vw, 44px);
+        letter-spacing: 0.03em;
+      }
+
+      .subtitle {
+        color: var(--muted);
+        font-size: 15px;
+        max-width: 680px;
+      }
+
+      .card {
+        background: var(--card);
+        border: 1px solid rgba(142, 202, 230, 0.25);
+        border-radius: 18px;
+        padding: 20px;
+        backdrop-filter: blur(14px);
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+      }
+
+      .panel-title {
+        font-size: 15px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin: 0 0 12px;
+      }
+
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+      }
+
+      .controls input {
+        background: transparent;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        color: var(--ink);
+        padding: 8px 10px;
+        width: 140px;
+        font-family: "JetBrains Mono", monospace;
+      }
+
+      .controls button {
+        background: var(--accent);
+        color: #1b1b1b;
+        border: none;
+        border-radius: 10px;
+        padding: 9px 14px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .controls button.secondary {
+        background: transparent;
+        color: var(--ink);
+        border: 1px solid var(--line);
+      }
+
+      .viz {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .nodes {
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+      }
+
+      .node {
+        position: relative;
+        width: 70px;
+        height: 70px;
+        border-radius: 18px;
+        background: rgba(142, 202, 230, 0.15);
+        border: 2px solid transparent;
+        display: grid;
+        place-items: center;
+        font-weight: 700;
+        font-size: 18px;
+      }
+
+      .node .tags {
+        position: absolute;
+        bottom: -16px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        gap: 4px;
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--ink);
+        pointer-events: none;
+      }
+
+      .tag {
+        padding: 2px 6px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.12);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+      }
+
+      .tag.curr {
+        background: rgba(255, 159, 28, 0.25);
+        border-color: rgba(255, 159, 28, 0.5);
+      }
+
+      .tag.prev {
+        background: rgba(42, 157, 143, 0.25);
+        border-color: rgba(42, 157, 143, 0.5);
+      }
+
+      .tag.kth {
+        background: rgba(239, 71, 111, 0.25);
+        border-color: rgba(239, 71, 111, 0.5);
+      }
+
+      .tag.group-prev {
+        background: rgba(255, 209, 102, 0.25);
+        border-color: rgba(255, 209, 102, 0.5);
+      }
+      .node.active {
+        border-color: var(--accent);
+        box-shadow: 0 0 12px rgba(255, 183, 3, 0.4);
+      }
+
+      .node.group {
+        border-color: var(--accent-2);
+      }
+
+      .node.curr {
+        border-color: #ff9f1c;
+        box-shadow: 0 0 10px rgba(255, 159, 28, 0.45);
+      }
+
+      .node.prev {
+        border-color: #2a9d8f;
+        box-shadow: 0 0 10px rgba(42, 157, 143, 0.4);
+      }
+
+      .node.kth {
+        border-color: #ef476f;
+        box-shadow: 0 0 10px rgba(239, 71, 111, 0.35);
+      }
+
+      .node.group-prev {
+        border-color: #ffd166;
+        box-shadow: 0 0 10px rgba(255, 209, 102, 0.35);
+      }
+
+      .arrow {
+        align-self: center;
+        color: var(--muted);
+        font-size: 24px;
+      }
+
+      .legend {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 10px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      .legend span {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .swatch {
+        width: 14px;
+        height: 14px;
+        border-radius: 4px;
+      }
+
+      .swatch.active {
+        background: var(--accent);
+      }
+
+      .swatch.group {
+        background: var(--accent-2);
+      }
+
+      .swatch.curr {
+        background: #ff9f1c;
+      }
+
+      .swatch.prev {
+        background: #2a9d8f;
+      }
+
+      .swatch.kth {
+        background: #ef476f;
+      }
+
+      .swatch.group-prev {
+        background: #ffd166;
+      }
+
+      .code-block {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 13px;
+        line-height: 1.6;
+        border-radius: 16px;
+        background: rgba(15, 20, 30, 0.8);
+        border: 1px solid rgba(142, 202, 230, 0.2);
+        padding: 16px;
+        overflow: auto;
+        max-height: 520px;
+      }
+
+      .code-line {
+        display: grid;
+        grid-template-columns: 36px 1fr;
+        gap: 12px;
+        padding: 2px 0;
+        border-radius: 8px;
+      }
+
+      .code-line.active {
+        background: rgba(255, 183, 3, 0.16);
+        color: #fff1cf;
+      }
+
+      .code-num {
+        color: rgba(142, 202, 230, 0.6);
+        text-align: right;
+        user-select: none;
+      }
+
+      .code-text {
+        white-space: pre;
+      }
+
+      .status {
+        font-size: 14px;
+        color: var(--muted);
+      }
+
+      @media (max-width: 900px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="grid">
+      <header>
+        <h1>Linked List K 組反轉</h1>
+        <div class="subtitle">
+          將鏈結串列以每 <strong>K</strong> 個節點為一組反轉，展示每個步驟的指標移動，
+          同步標示對應的 C++ 程式行。
+        </div>
+      </header>
+
+      <section class="card viz">
+        <h2 class="panel-title">視覺化</h2>
+        <div class="controls">
+          <label>
+            List
+            <input id="listInput" value="1,2,3,4,5,6,7,8" />
+          </label>
+          <label>
+            K
+            <input id="kInput" value="3" />
+          </label>
+          <button id="resetBtn" class="secondary">重置</button>
+          <button id="stepBtn">下一步</button>
+          <button id="playBtn" class="secondary">播放</button>
+          <label>
+            速度(ms)
+            <input id="speedInput" value="850" />
+          </label>
+        </div>
+        <div class="status" id="statusText"></div>
+        <div class="nodes" id="nodes"></div>
+        <div class="legend">
+          <span><span class="swatch active"></span>目前指標</span>
+          <span><span class="swatch group"></span>反轉範圍</span>
+          <span><span class="swatch curr"></span>curr</span>
+          <span><span class="swatch prev"></span>prev</span>
+          <span><span class="swatch kth"></span>kth</span>
+          <span><span class="swatch group-prev"></span>groupPrev</span>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2 class="panel-title">C++ 程式碼</h2>
+        <div class="code-block" id="codeBlock"></div>
+      </section>
+    </main>
+
+    <script>
+      const codeLines = [
+        "struct ListNode {",
+        "    int val;",
+        "    ListNode* next;",
+        "    ListNode(int x) : val(x), next(nullptr) {}",
+        "};",
+        "",
+        "ListNode* reverseKGroup(ListNode* head, int k) {",
+        "    if (!head || k <= 1) return head;",
+        "    ListNode dummy(0);",
+        "    dummy.next = head;",
+        "    ListNode* groupPrev = &dummy;",
+        "",
+        "    while (true) {",
+        "        ListNode* kth = groupPrev;",
+        "        for (int i = 0; i < k && kth; i++) kth = kth->next;",
+        "        if (!kth) break;",
+        "        ListNode* groupNext = kth->next;",
+        "        ListNode* prev = groupNext;",
+        "        ListNode* curr = groupPrev->next;",
+        "",
+        "        while (curr != groupNext) {",
+        "            ListNode* tmp = curr->next;",
+        "            curr->next = prev;",
+        "            prev = curr;",
+        "            curr = tmp;",
+        "        }",
+        "",
+        "        ListNode* tmp = groupPrev->next;",
+        "        groupPrev->next = kth;",
+        "        groupPrev = tmp;",
+        "    }",
+        "",
+        "    return dummy.next;",
+        "}",
+      ];
+
+      const codeBlock = document.getElementById("codeBlock");
+      const nodesEl = document.getElementById("nodes");
+      const statusText = document.getElementById("statusText");
+      const listInput = document.getElementById("listInput");
+      const kInput = document.getElementById("kInput");
+      const stepBtn = document.getElementById("stepBtn");
+      const resetBtn = document.getElementById("resetBtn");
+      const playBtn = document.getElementById("playBtn");
+      const speedInput = document.getElementById("speedInput");
+
+      let steps = [];
+      let stepIndex = 0;
+      let playTimer = null;
+
+      function renderCode(activeLine) {
+        codeBlock.innerHTML = "";
+        codeLines.forEach((line, idx) => {
+          const div = document.createElement("div");
+          div.className = "code-line" + (idx + 1 === activeLine ? " active" : "");
+          const num = document.createElement("span");
+          num.className = "code-num";
+          num.textContent = idx + 1;
+          const code = document.createElement("span");
+          code.className = "code-text";
+          code.textContent = line;
+          div.appendChild(num);
+          div.appendChild(code);
+          codeBlock.appendChild(div);
+        });
+      }
+
+      function renderNodes(state) {
+        nodesEl.innerHTML = "";
+        state.list.forEach((value, idx) => {
+          const node = document.createElement("div");
+          node.className = "node";
+          if (state.groupRange && idx >= state.groupRange[0] && idx <= state.groupRange[1]) {
+            node.classList.add("group");
+          }
+          if (idx === state.activeIndex) {
+            node.classList.add("active");
+          }
+          if (state.markers) {
+            if (state.markers.curr === idx) node.classList.add("curr");
+            if (state.markers.prev === idx) node.classList.add("prev");
+            if (state.markers.kth === idx) node.classList.add("kth");
+            if (state.markers.groupPrev === idx) node.classList.add("group-prev");
+          }
+          node.textContent = value;
+          const tags = [];
+          if (state.markers) {
+            if (state.markers.curr === idx) tags.push({ text: "curr", cls: "curr" });
+            if (state.markers.prev === idx) tags.push({ text: "prev", cls: "prev" });
+            if (state.markers.kth === idx) tags.push({ text: "kth", cls: "kth" });
+            if (state.markers.groupPrev === idx) tags.push({ text: "gPrev", cls: "group-prev" });
+          }
+          if (tags.length) {
+            const tagWrap = document.createElement("div");
+            tagWrap.className = "tags";
+            tags.forEach((tag) => {
+              const pill = document.createElement("span");
+              pill.className = `tag ${tag.cls}`;
+              pill.textContent = tag.text;
+              tagWrap.appendChild(pill);
+            });
+            node.appendChild(tagWrap);
+          }
+          nodesEl.appendChild(node);
+          if (idx < state.list.length - 1) {
+            const arrow = document.createElement("div");
+            arrow.className = "arrow";
+            arrow.textContent = "→";
+            nodesEl.appendChild(arrow);
+          }
+        });
+      }
+
+      function setStatus(state) {
+        statusText.textContent = state.caption;
+      }
+
+      function snapshot({ list, activeIndex, groupRange, markers, line, caption }) {
+        steps.push({
+          list: [...list],
+          activeIndex,
+          groupRange,
+          markers: markers ? { ...markers } : null,
+          line,
+          caption,
+        });
+      }
+
+      function simulate(list, k) {
+        steps = [];
+        const n = list.length;
+        let groupPrevIndex = -1;
+        snapshot({
+          list,
+          activeIndex: list.length ? 0 : null,
+          groupRange: null,
+          markers: {},
+          line: 8,
+          caption: "檢查邊界條件",
+        });
+        snapshot({
+          list,
+          activeIndex: list.length ? 0 : null,
+          groupRange: null,
+          markers: {},
+          line: 9,
+          caption: "建立 dummy 節點",
+        });
+        snapshot({
+          list,
+          activeIndex: list.length ? 0 : null,
+          groupRange: null,
+          markers: {},
+          line: 10,
+          caption: "dummy.next 指向 head",
+        });
+        snapshot({
+          list,
+          activeIndex: list.length ? 0 : null,
+          groupRange: null,
+          markers: { groupPrev: -1 },
+          line: 11,
+          caption: "groupPrev 指向 dummy",
+        });
+        while (true) {
+          snapshot({
+            list,
+            activeIndex: groupPrevIndex >= 0 ? groupPrevIndex : null,
+            groupRange: null,
+            markers: { groupPrev: groupPrevIndex },
+            line: 13,
+            caption: "進入下一組檢查",
+          });
+          let kthIndex = groupPrevIndex;
+          snapshot({
+            list,
+            activeIndex: kthIndex >= 0 ? kthIndex : null,
+            groupRange: null,
+            markers: { groupPrev: groupPrevIndex, kth: kthIndex },
+            line: 14,
+            caption: "kth 從 groupPrev 起始",
+          });
+          for (let i = 0; i < k && kthIndex < n; i++) {
+            kthIndex += 1;
+            snapshot({
+              list,
+              activeIndex: kthIndex < n ? kthIndex : null,
+              groupRange: null,
+              markers: { groupPrev: groupPrevIndex, kth: kthIndex },
+              line: 15,
+              caption: `kth 往前走第 ${i + 1} 步`,
+            });
+          }
+          if (kthIndex >= n) {
+            snapshot({
+              list,
+              activeIndex: null,
+              groupRange: null,
+              markers: { groupPrev: groupPrevIndex },
+              line: 16,
+              caption: "不足 k 個節點，結束",
+            });
+            break;
+          }
+          const groupStart = groupPrevIndex + 1;
+          const groupEnd = kthIndex;
+          const groupNextIndex = groupEnd + 1;
+          snapshot({
+            list,
+            activeIndex: groupNextIndex < n ? groupNextIndex : null,
+            groupRange: [groupStart, groupEnd],
+            markers: { groupPrev: groupPrevIndex, kth: kthIndex },
+            line: 17,
+            caption: "groupNext 指向 kth 之後",
+          });
+          snapshot({
+            list,
+            activeIndex: groupNextIndex < n ? groupNextIndex : null,
+            groupRange: [groupStart, groupEnd],
+            markers: { groupPrev: groupPrevIndex, kth: kthIndex, prev: groupNextIndex },
+            line: 18,
+            caption: "prev 指向 groupNext",
+          });
+          let currIndex = groupStart;
+          snapshot({
+            list,
+            activeIndex: currIndex,
+            groupRange: [groupStart, groupEnd],
+            markers: {
+              groupPrev: groupPrevIndex,
+              kth: kthIndex,
+              prev: groupNextIndex,
+              curr: currIndex,
+            },
+            line: 19,
+            caption: "curr 指向 groupPrev->next",
+          });
+          while (currIndex !== groupNextIndex) {
+            snapshot({
+              list,
+              activeIndex: currIndex,
+              groupRange: [groupStart, groupEnd],
+              markers: {
+                groupPrev: groupPrevIndex,
+                kth: kthIndex,
+                prev: groupNextIndex,
+                curr: currIndex,
+              },
+              line: 21,
+              caption: "進入反轉迴圈",
+            });
+            const tmpIndex = currIndex + 1;
+            snapshot({
+              list,
+              activeIndex: currIndex,
+              groupRange: [groupStart, groupEnd],
+              markers: {
+                groupPrev: groupPrevIndex,
+                kth: kthIndex,
+                prev: groupNextIndex,
+                curr: currIndex,
+              },
+              line: 22,
+              caption: "tmp 暫存 curr->next",
+            });
+            snapshot({
+              list,
+              activeIndex: currIndex,
+              groupRange: [groupStart, groupEnd],
+              markers: {
+                groupPrev: groupPrevIndex,
+                kth: kthIndex,
+                prev: groupNextIndex,
+                curr: currIndex,
+              },
+              line: 23,
+              caption: "curr->next 指向 prev",
+            });
+            snapshot({
+              list,
+              activeIndex: currIndex,
+              groupRange: [groupStart, groupEnd],
+              markers: {
+                groupPrev: groupPrevIndex,
+                kth: kthIndex,
+                prev: currIndex,
+                curr: currIndex,
+              },
+              line: 24,
+              caption: "prev 移動到 curr",
+            });
+            currIndex = tmpIndex;
+            snapshot({
+              list,
+              activeIndex: currIndex < n ? currIndex : null,
+              groupRange: [groupStart, groupEnd],
+              markers: {
+                groupPrev: groupPrevIndex,
+                kth: kthIndex,
+                prev: currIndex - 1,
+                curr: currIndex < n ? currIndex : null,
+              },
+              line: 25,
+              caption: "curr 移動到 tmp",
+            });
+          }
+          const slice = list.slice(groupStart, groupEnd + 1);
+          const reversed = slice.reverse();
+          list.splice(groupStart, k, ...reversed);
+          snapshot({
+            list,
+            activeIndex: groupStart,
+            groupRange: [groupStart, groupEnd],
+            markers: {
+              groupPrev: groupPrevIndex,
+              kth: kthIndex,
+              prev: groupEnd,
+              curr: groupNextIndex < n ? groupNextIndex : null,
+            },
+            line: 28,
+            caption: "tmp 保存 groupPrev->next",
+          });
+          snapshot({
+            list,
+            activeIndex: groupStart,
+            groupRange: [groupStart, groupEnd],
+            markers: {
+              groupPrev: groupPrevIndex,
+              kth: kthIndex,
+              prev: groupEnd,
+              curr: groupNextIndex < n ? groupNextIndex : null,
+            },
+            line: 29,
+            caption: "groupPrev->next 指向 kth",
+          });
+          groupPrevIndex = groupStart + k - 1;
+          snapshot({
+            list,
+            activeIndex: groupPrevIndex,
+            groupRange: null,
+            markers: { groupPrev: groupPrevIndex },
+            line: 30,
+            caption: "groupPrev 移動到本組尾端",
+          });
+        }
+        snapshot({
+          list,
+          activeIndex: list.length ? Math.min(groupPrevIndex, list.length - 1) : null,
+          groupRange: null,
+          markers: { groupPrev: groupPrevIndex },
+          line: 33,
+          caption: "回傳新的 head",
+        });
+      }
+
+      function normalizeInput() {
+        const list = listInput.value
+          .split(",")
+          .map((v) => v.trim())
+          .filter((v) => v.length)
+          .map((v) => Number(v))
+          .filter((v) => !Number.isNaN(v));
+        const k = Math.max(1, Number(kInput.value) || 1);
+        return { list, k };
+      }
+
+      function goToStep(index) {
+        const state = steps[index];
+        if (!state) return;
+        renderNodes(state);
+        renderCode(state.line);
+        setStatus(state);
+      }
+
+      function reset() {
+        const { list, k } = normalizeInput();
+        simulate([...list], k);
+        stepIndex = 0;
+        goToStep(stepIndex);
+      }
+
+      stepBtn.addEventListener("click", () => {
+        stepIndex = Math.min(stepIndex + 1, steps.length - 1);
+        goToStep(stepIndex);
+      });
+
+      resetBtn.addEventListener("click", () => {
+        stopPlay();
+        reset();
+      });
+
+      function stopPlay() {
+        if (playTimer) {
+          clearInterval(playTimer);
+          playTimer = null;
+          playBtn.textContent = "播放";
+        }
+      }
+
+      function getSpeed() {
+        const value = Math.max(150, Number(speedInput.value) || 850);
+        return value;
+      }
+
+      speedInput.addEventListener("change", () => {
+        if (!playTimer) return;
+        stopPlay();
+        playBtn.textContent = "暫停";
+        playTimer = setInterval(() => {
+          if (stepIndex >= steps.length - 1) {
+            stopPlay();
+            return;
+          }
+          stepIndex += 1;
+          goToStep(stepIndex);
+        }, getSpeed());
+      });
+
+      playBtn.addEventListener("click", () => {
+        if (playTimer) {
+          stopPlay();
+          return;
+        }
+        playBtn.textContent = "暫停";
+        playTimer = setInterval(() => {
+          if (stepIndex >= steps.length - 1) {
+            stopPlay();
+            return;
+          }
+          stepIndex += 1;
+          goToStep(stepIndex);
+        }, getSpeed());
+      });
+
+      reset();
+    </script>
+  </body>
+</html>

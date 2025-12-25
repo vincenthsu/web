@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>迴文鏈結串列視覺化教學</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Noto+Sans+TC:wght@400;500;700&display=swap');
+
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #f8fafc;
+        }
+
+        .code-font {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .node {
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            border: 2px solid #3b82f6;
+            background: white;
+            position: relative;
+            z-index: 10;
+        }
+
+        .node.active-slow { background-color: #fef08a; border-color: #eab308; transform: scale(1.1); }
+        .node.active-fast { background-color: #bfdbfe; border-color: #2563eb; transform: scale(1.1); }
+        .node.comparing { background-color: #bbf7d0; border-color: #16a34a; }
+        .node.mismatch { background-color: #fecaca; border-color: #dc2626; animation: shake 0.5s; }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        .arrow {
+            height: 2px;
+            background-color: #94a3b8;
+            flex-grow: 1;
+            min-width: 30px;
+            position: relative;
+            transition: all 0.5s;
+        }
+
+        .arrow::after {
+            content: '';
+            position: absolute;
+            right: -2px;
+            top: -4px;
+            width: 10px;
+            height: 10px;
+            border-top: 2px solid #94a3b8;
+            border-right: 2px solid #94a3b8;
+            transform: rotate(45deg);
+        }
+
+        .arrow.reversed {
+            background-color: #ec4899;
+        }
+        .arrow.reversed::after {
+            right: auto;
+            left: -2px;
+            transform: rotate(-135deg);
+            border-color: #ec4899;
+        }
+
+        .highlight-line {
+            background-color: rgba(59, 130, 246, 0.2);
+            border-left: 4px solid #3b82f6;
+            margin-left: -4px;
+        }
+
+        .pointer-label {
+            position: absolute;
+            top: -25px;
+            font-size: 12px;
+            font-weight: bold;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+    <div class="max-w-6xl mx-auto">
+        <!-- Header -->
+        <header class="mb-8 text-center">
+            <h1 class="text-3xl font-bold text-slate-800 mb-2">Check if Linked List is Palindrome</h1>
+            <p class="text-slate-600">判斷鏈結串列是否為迴文 (視覺化演算法)</p>
+        </header>
+
+        <!-- UI Controls -->
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 mb-8">
+            <div class="flex flex-wrap gap-4 items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <input type="text" id="listInput" value="1,2,3,2,1" 
+                           class="border rounded-lg px-4 py-2 w-48 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                           placeholder="輸入數字以逗號分隔">
+                    <button onclick="resetApp()" class="bg-slate-800 text-white px-4 py-2 rounded-lg hover:bg-slate-700 transition">
+                        重新載入
+                    </button>
+                </div>
+                
+                <div class="flex items-center gap-4">
+                    <button id="prevBtn" onclick="stepBack()" class="p-2 rounded-full hover:bg-slate-100 disabled:opacity-30">
+                        <i data-lucide="skip-back"></i>
+                    </button>
+                    <button id="playBtn" onclick="togglePlay()" class="bg-blue-600 text-white p-3 rounded-full hover:bg-blue-500 shadow-lg transition">
+                        <i data-lucide="play" id="playIcon"></i>
+                    </button>
+                    <button id="nextBtn" onclick="stepForward()" class="p-2 rounded-full hover:bg-slate-100 disabled:opacity-30">
+                        <i data-lucide="skip-forward"></i>
+                    </button>
+                </div>
+
+                <div class="text-sm font-medium text-slate-500">
+                    步數: <span id="stepCounter" class="text-blue-600">0</span> / <span id="totalSteps">0</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- Visualization Area -->
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col items-center justify-center min-h-[300px]">
+                <div id="visualContainer" class="flex items-center flex-wrap justify-center gap-y-12 py-10 w-full">
+                    <!-- Nodes will be injected here -->
+                </div>
+                
+                <div id="statusMessage" class="mt-8 p-4 rounded-xl bg-slate-50 border border-slate-100 w-full text-center font-medium">
+                    點擊播放開始執行
+                </div>
+            </div>
+
+            <!-- Code Area -->
+            <div class="bg-[#1e1e1e] rounded-2xl shadow-xl overflow-hidden">
+                <div class="bg-[#2d2d2d] px-4 py-2 flex items-center justify-between">
+                    <span class="text-slate-400 text-sm font-mono">palindrome_check.cpp</span>
+                    <div class="flex gap-1.5">
+                        <div class="w-3 height-3 rounded-full bg-red-500" style="width: 12px; height: 12px;"></div>
+                        <div class="w-3 height-3 rounded-full bg-yellow-500" style="width: 12px; height: 12px;"></div>
+                        <div class="w-3 height-3 rounded-full bg-green-500" style="width: 12px; height: 12px;"></div>
+                    </div>
+                </div>
+                <div class="p-4 overflow-x-auto">
+                    <pre id="codeBlock" class="text-blue-200 code-font text-sm leading-6"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // C++ Code lines for highlighting
+        const cppCodeLines = [
+            "bool isPalindrome(ListNode* head) {",                // 0
+            "    if (!head || !head->next) return true;",        // 1
+            "    ListNode *slow = head, *fast = head;",           // 2
+            "    while (fast->next && fast->next->next) {",      // 3
+            "        slow = slow->next;",                        // 4
+            "        fast = fast->next->next;",                  // 5
+            "    }",                                             // 6
+            "    ListNode* secondHalf = reverse(slow->next);",   // 7
+            "    ListNode* p1 = head, *p2 = secondHalf;",        // 8
+            "    while (p2) {",                                  // 9
+            "        if (p1->val != p2->val) return false;",     // 10
+            "        p1 = p1->next;",                            // 11
+            "        p2 = p2->next;",                            // 12
+            "    }",                                             // 13
+            "    return true;",                                  // 14
+            "}"                                                  // 15
+        ];
+
+        let state = {
+            nodes: [],
+            currentStep: 0,
+            history: [],
+            isPlaying: false,
+            playbackSpeed: 1000,
+            timer: null
+        };
+
+        // Helper to safely call Lucide
+        function refreshIcons() {
+            if (window.lucide && typeof window.lucide.createIcons === 'function') {
+                window.lucide.createIcons();
+            }
+        }
+
+        function initCode() {
+            const codeBlock = document.getElementById('codeBlock');
+            codeBlock.innerHTML = cppCodeLines.map((line, i) => 
+                `<div id="line-${i}" class="px-2 whitespace-pre">${line}</div>`
+            ).join('');
+        }
+
+        function createLinkedList(inputStr) {
+            const vals = inputStr.split(',').map(v => v.trim()).filter(v => v !== "");
+            return vals.map((val, idx) => ({
+                id: idx,
+                val: val,
+                next: idx < vals.length - 1 ? idx + 1 : null,
+                isReversed: false
+            }));
+        }
+
+        function generateSteps(initialNodes) {
+            let steps = [];
+            let nodes = JSON.parse(JSON.stringify(initialNodes));
+            
+            steps.push({ line: 0, msg: "開始判斷是否為迴文", pointers: {}, reversed: [] });
+
+            if (nodes.length <= 1) {
+                steps.push({ line: 1, msg: "串列長度小於等於 1，為迴文", pointers: {}, reversed: [] });
+                steps.push({ line: 14, msg: "回傳 true", pointers: {}, result: true });
+                return steps;
+            }
+
+            let slow = 0;
+            let fast = 0;
+            steps.push({ line: 2, msg: "初始化快慢指標 slow, fast 於 head", pointers: { slow, fast }, reversed: [] });
+
+            while (nodes[fast] && nodes[fast].next !== null && nodes[nodes[fast].next].next !== null) {
+                steps.push({ line: 3, msg: "檢查 fast 指標是否可移動", pointers: { slow, fast }, reversed: [] });
+                slow = nodes[slow].next;
+                steps.push({ line: 4, msg: "slow 移動一步", pointers: { slow, fast }, reversed: [] });
+                fast = nodes[nodes[fast].next].next;
+                steps.push({ line: 5, msg: "fast 移動兩步", pointers: { slow, fast }, reversed: [] });
+            }
+            steps.push({ line: 6, msg: "找到中點", pointers: { slow, fast }, reversed: [] });
+
+            let mid = slow;
+            let secondHalfStart = nodes[mid].next;
+            let reversedIds = [];
+            
+            steps.push({ line: 7, msg: "反轉後半段串列", pointers: { slow }, reversed: reversedIds });
+            
+            let curr = secondHalfStart;
+            while(curr !== null) {
+                reversedIds.push(curr);
+                let nextTemp = nodes[curr].next;
+                curr = nextTemp;
+            }
+            steps.push({ line: 7, msg: "後半段反轉完成", pointers: { slow }, reversed: reversedIds, isActuallyReversed: true });
+
+            let p1 = 0;
+            let p2 = reversedIds[reversedIds.length - 1]; 
+            let p2Idx = reversedIds.length - 1;
+
+            steps.push({ line: 8, msg: "初始化 p1 於 head, p2 於後半段首節點", pointers: { p1, p2 }, reversed: reversedIds });
+
+            let isPal = true;
+            while (p2 !== null && p2 !== undefined) {
+                steps.push({ line: 9, msg: "比較 p1 與 p2 的數值", pointers: { p1, p2 }, reversed: reversedIds });
+                
+                if (nodes[p1].val !== nodes[p2].val) {
+                    steps.push({ line: 10, msg: `數值不匹配: ${nodes[p1].val} != ${nodes[p2].val}`, pointers: { p1, p2 }, reversed: reversedIds, mismatch: [p1, p2] });
+                    isPal = false;
+                    break;
+                }
+                
+                steps.push({ line: 10, msg: `數值匹配: ${nodes[p1].val} == ${nodes[p2].val}`, pointers: { p1, p2 }, reversed: reversedIds, comparing: [p1, p2] });
+                
+                p1 = nodes[p1].next;
+                steps.push({ line: 11, msg: "p1 移動到下一個節點", pointers: { p1, p2 }, reversed: reversedIds });
+                
+                p2Idx--;
+                p2 = p2Idx >= 0 ? reversedIds[p2Idx] : null;
+                steps.push({ line: 12, msg: "p2 移動到下一個節點", pointers: { p1, p2 }, reversed: reversedIds });
+            }
+
+            if (isPal) {
+                steps.push({ line: 14, msg: "所有節點皆匹配，回傳 true", pointers: {}, result: true });
+            } else {
+                steps.push({ line: 10, msg: "不匹配，回傳 false", pointers: {}, result: false });
+            }
+
+            return steps;
+        }
+
+        function renderStep(stepIndex) {
+            const step = state.history[stepIndex];
+            const container = document.getElementById('visualContainer');
+            const status = document.getElementById('statusMessage');
+            
+            document.querySelectorAll('.highlight-line').forEach(el => el.classList.remove('highlight-line'));
+            const lineEl = document.getElementById(`line-${step.line}`);
+            if (lineEl) lineEl.classList.add('highlight-line');
+
+            status.textContent = step.msg;
+            if (step.result === true) status.className = "mt-8 p-4 rounded-xl bg-green-100 border border-green-200 w-full text-center font-bold text-green-700";
+            else if (step.result === false) status.className = "mt-8 p-4 rounded-xl bg-red-100 border border-red-200 w-full text-center font-bold text-red-700";
+            else status.className = "mt-8 p-4 rounded-xl bg-slate-50 border border-slate-100 w-full text-center font-medium";
+
+            container.innerHTML = '';
+            state.nodes.forEach((node, i) => {
+                const nodeWrapper = document.createElement('div');
+                nodeWrapper.className = 'flex items-center';
+                
+                const nodeDiv = document.createElement('div');
+                nodeDiv.className = `node shadow-sm font-bold text-slate-700`;
+                nodeDiv.innerText = node.val;
+                
+                Object.entries(step.pointers).forEach(([name, id]) => {
+                    if (id === node.id) {
+                        const label = document.createElement('div');
+                        label.className = `pointer-label ${name === 'fast' ? 'text-blue-600' : name === 'slow' ? 'text-yellow-600' : 'text-green-600'}`;
+                        label.style.top = name === 'fast' ? '-45px' : '-25px';
+                        label.innerHTML = `<i data-lucide="chevron-down" class="w-4 h-4 mx-auto"></i>${name}`;
+                        nodeDiv.appendChild(label);
+                        
+                        if (name === 'slow') nodeDiv.classList.add('active-slow');
+                        if (name === 'fast') nodeDiv.classList.add('active-fast');
+                    }
+                });
+
+                if (step.comparing && step.comparing.includes(node.id)) nodeDiv.classList.add('comparing');
+                if (step.mismatch && step.mismatch.includes(node.id)) nodeDiv.classList.add('mismatch');
+
+                nodeWrapper.appendChild(nodeDiv);
+
+                if (i < state.nodes.length - 1) {
+                    const arrow = document.createElement('div');
+                    arrow.className = 'arrow';
+                    const isPartOfSecondHalf = step.reversed && step.reversed.includes(node.id) && step.reversed.includes(state.nodes[i+1].id);
+                    if (isPartOfSecondHalf && step.isActuallyReversed) {
+                        arrow.classList.add('reversed');
+                    }
+                    nodeWrapper.appendChild(arrow);
+                }
+                
+                container.appendChild(nodeWrapper);
+            });
+
+            document.getElementById('stepCounter').textContent = stepIndex;
+            refreshIcons();
+
+            document.getElementById('prevBtn').disabled = stepIndex === 0;
+            document.getElementById('nextBtn').disabled = stepIndex === state.history.length - 1;
+        }
+
+        function resetApp() {
+            const input = document.getElementById('listInput').value;
+            state.nodes = createLinkedList(input);
+            state.history = generateSteps(state.nodes);
+            state.currentStep = 0;
+            state.isPlaying = false;
+            if (state.timer) clearInterval(state.timer);
+            
+            document.getElementById('totalSteps').textContent = state.history.length - 1;
+            document.getElementById('playIcon').setAttribute('data-lucide', 'play');
+            
+            initCode();
+            renderStep(0);
+            refreshIcons();
+        }
+
+        function stepForward() {
+            if (state.currentStep < state.history.length - 1) {
+                state.currentStep++;
+                renderStep(state.currentStep);
+            } else {
+                togglePlay();
+            }
+        }
+
+        function stepBack() {
+            if (state.currentStep > 0) {
+                state.currentStep--;
+                renderStep(state.currentStep);
+            }
+        }
+
+        function togglePlay() {
+            state.isPlaying = !state.isPlaying;
+            const icon = document.getElementById('playIcon');
+            
+            if (state.isPlaying) {
+                icon.setAttribute('data-lucide', 'pause');
+                state.timer = setInterval(stepForward, state.playbackSpeed);
+            } else {
+                icon.setAttribute('data-lucide', 'play');
+                clearInterval(state.timer);
+            }
+            refreshIcons();
+        }
+
+        window.addEventListener('load', () => {
+            resetApp();
+        });
+    </script>
+</body>
+</html>

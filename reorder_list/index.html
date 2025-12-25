@@ -1,0 +1,805 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>重新排序 L0→Ln→L1→Ln-1 視覺化</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600&family=IBM+Plex+Sans+TC:wght@300;400;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg-1: #f4efe6;
+      --bg-2: #e9f0f4;
+      --ink: #1f252b;
+      --muted: #6e7781;
+      --accent: #e46b44;
+      --accent-2: #2b8aa8;
+      --card: #ffffff;
+      --line: #d5dbe2;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "IBM Plex Sans TC", system-ui, sans-serif;
+      color: var(--ink);
+      background: radial-gradient(circle at 10% 10%, #fff8ee 0%, transparent 45%),
+                  radial-gradient(circle at 80% 0%, #e9f5ff 0%, transparent 45%),
+                  linear-gradient(135deg, var(--bg-1), var(--bg-2));
+      min-height: 100vh;
+    }
+    header {
+      padding: 28px 6vw 10px;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(24px, 3vw, 36px);
+      letter-spacing: 0.5px;
+    }
+    .subtitle {
+      color: var(--muted);
+      font-size: 14px;
+    }
+    main {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+      gap: 24px;
+      padding: 16px 6vw 40px;
+    }
+    .panel {
+      background: var(--card);
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(24, 28, 32, 0.08);
+      padding: 20px;
+    }
+    .visual {
+      display: grid;
+      gap: 16px;
+    }
+    .list-area {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 16px;
+      min-height: 180px;
+      background: linear-gradient(180deg, #ffffff, #f8fafb);
+    }
+    .nodes {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+    .node {
+      width: 54px;
+      height: 54px;
+      border-radius: 999px;
+      background: #1f252b;
+      color: #fff;
+      display: grid;
+      place-items: center;
+      font-weight: 600;
+      position: relative;
+      transition: transform 0.4s ease, background 0.4s ease;
+    }
+    .node::after {
+      content: "";
+      position: absolute;
+      right: -14px;
+      width: 16px;
+      height: 2px;
+      background: var(--accent-2);
+    }
+    .node:last-child::after { display: none; }
+    .node.secondary { background: var(--accent); }
+    .node.focus { transform: translateY(-6px) scale(1.05); }
+    .legend {
+      display: flex;
+      gap: 16px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+      background: var(--accent);
+    }
+    .dot.alt { background: #1f252b; }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+    button {
+      border: none;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: var(--ink);
+      color: #fff;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s ease, background 0.2s ease;
+    }
+    button:hover { transform: translateY(-2px); }
+    button.secondary { background: var(--accent-2); }
+    button.ghost {
+      background: #fff;
+      color: var(--ink);
+      border: 1px solid var(--line);
+    }
+    select {
+      padding: 8px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      font-family: inherit;
+    }
+    .step-info {
+      display: grid;
+      gap: 6px;
+      font-size: 14px;
+    }
+    .step-title { font-weight: 600; }
+    .code {
+      font-family: "Chakra Petch", ui-monospace, monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      background: #10151b;
+      color: #cdd6df;
+      border-radius: 12px;
+      padding: 16px;
+      overflow: auto;
+      max-height: 520px;
+    }
+    .code-line {
+      display: grid;
+      grid-template-columns: 32px 1fr;
+      padding: 0 6px;
+      border-radius: 6px;
+    }
+    .code-line.active { background: rgba(228, 107, 68, 0.2); }
+    .line-no {
+      color: #66707a;
+      text-align: right;
+      padding-right: 12px;
+      user-select: none;
+    }
+    .badge {
+      background: rgba(43, 138, 168, 0.15);
+      color: var(--accent-2);
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    @media (max-width: 900px) {
+      main { grid-template-columns: 1fr; }
+      .code { max-height: none; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>重新排序 L0 → Ln → L1 → Ln-1</h1>
+    <div class="subtitle">資料結構：鏈結串列｜步驟：找中點 → 反轉後半 → 交錯合併</div>
+  </header>
+  <main>
+    <section class="panel visual">
+      <div class="legend">
+        <span><span class="dot alt"></span> 原序列</span>
+        <span><span class="dot"></span> 合併順序</span>
+        <span class="badge" id="phase">Phase 1/3</span>
+      </div>
+      <div class="list-area">
+        <div class="nodes" id="nodes"></div>
+      </div>
+      <div class="step-info">
+        <div class="step-title" id="stepTitle">初始化</div>
+        <div id="stepDesc">點擊播放開始逐步觀看。</div>
+      </div>
+      <div class="controls">
+        <button id="playBtn">播放</button>
+        <button class="ghost" id="prevBtn">上一步</button>
+        <button class="secondary" id="nextBtn">下一步</button>
+        <button class="ghost" id="resetBtn">重置</button>
+        <label>
+          速度
+          <select id="speedSel">
+            <option value="1200">慢</option>
+            <option value="800" selected>中</option>
+            <option value="500">快</option>
+          </select>
+        </label>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="legend" style="margin-bottom: 12px;">
+        <span class="badge">C++ 對照程式</span>
+        <span class="subtitle">高亮目前執行行數</span>
+      </div>
+      <pre class="code" id="code"></pre>
+    </section>
+  </main>
+
+  <script>
+    const codeLines = [
+      "struct ListNode {",
+      "    int val;",
+      "    ListNode* next;",
+      "    ListNode(int x) : val(x), next(nullptr) {}",
+      "};",
+      "",
+      "void reorderList(ListNode* head) {",
+      "    if (!head || !head->next) return;",
+      "",
+      "    // 1) find middle",
+      "    ListNode* slow = head;",
+      "    ListNode* fast = head;",
+      "    while (fast && fast->next) {",
+      "        slow = slow->next;",
+      "        fast = fast->next->next;",
+      "    }",
+      "",
+      "    // 2) reverse second half",
+      "    ListNode* prev = nullptr;",
+      "    ListNode* cur = slow->next;",
+      "    slow->next = nullptr;",
+      "    while (cur) {",
+      "        ListNode* nxt = cur->next;",
+      "        cur->next = prev;",
+      "        prev = cur;",
+      "        cur = nxt;",
+      "    }",
+      "",
+      "    // 3) merge alternately",
+      "    ListNode* p1 = head;",
+      "    ListNode* p2 = prev;",
+      "    while (p2) {",
+      "        ListNode* n1 = p1->next;",
+      "        ListNode* n2 = p2->next;",
+      "        p1->next = p2;",
+      "        p2->next = n1;",
+      "        p1 = n1;",
+      "        p2 = n2;",
+      "    }",
+      "}",
+    ];
+
+    const steps = [
+      {
+        title: "初始化",
+        desc: "原始鏈結串列為 L0 → L1 → L2 → L3 → L4 → L5 → L6 → L7。",
+        order: [0,1,2,3,4,5,6,7],
+        focus: [],
+        phase: 1,
+        line: 7,
+      },
+      {
+        title: "檢查快慢指標迴圈",
+        desc: "進入 while (fast && fast->next) 檢查。",
+        order: [0,1,2,3,4,5,6,7],
+        focus: [0],
+        phase: 1,
+        line: 13,
+      },
+      {
+        title: "slow 前進",
+        desc: "slow = slow->next。",
+        order: [0,1,2,3,4,5,6,7],
+        focus: [1],
+        phase: 1,
+        line: 14,
+      },
+      {
+        title: "fast 前進",
+        desc: "fast = fast->next->next。",
+        order: [0,1,2,3,4,5,6,7],
+        focus: [2],
+        phase: 1,
+        line: 15,
+      },
+      {
+        title: "檢查快慢指標迴圈",
+        desc: "第二輪 while 檢查。",
+        order: [0,1,2,3,4,5,6,7],
+        focus: [2],
+        phase: 1,
+        line: 13,
+      },
+      {
+        title: "slow 前進",
+        desc: "slow = slow->next。",
+        order: [0,1,2,3,4,5,6,7],
+        focus: [2],
+        phase: 1,
+        line: 14,
+      },
+      {
+        title: "fast 前進",
+        desc: "fast = fast->next->next。",
+        order: [0,1,2,3,4,5,6,7],
+        focus: [4],
+        phase: 1,
+        line: 15,
+      },
+      {
+        title: "檢查快慢指標迴圈",
+        desc: "第三輪 while 檢查。",
+        order: [0,1,2,3,4,5,6,7],
+        focus: [4],
+        phase: 1,
+        line: 13,
+      },
+      {
+        title: "slow 前進",
+        desc: "slow = slow->next。",
+        order: [0,1,2,3,4,5,6,7],
+        focus: [3],
+        phase: 1,
+        line: 14,
+      },
+      {
+        title: "fast 前進",
+        desc: "fast = fast->next->next。",
+        order: [0,1,2,3,4,5,6,7],
+        focus: [6],
+        phase: 1,
+        line: 15,
+      },
+      {
+        title: "檢查快慢指標迴圈",
+        desc: "第四輪 while 檢查。",
+        order: [0,1,2,3,4,5,6,7],
+        focus: [6],
+        phase: 1,
+        line: 13,
+      },
+      {
+        title: "slow 前進",
+        desc: "slow = slow->next。",
+        order: [0,1,2,3,4,5,6,7],
+        focus: [4],
+        phase: 1,
+        line: 14,
+      },
+      {
+        title: "fast 前進",
+        desc: "fast = fast->next->next。",
+        order: [0,1,2,3,4,5,6,7],
+        focus: [7],
+        phase: 1,
+        line: 15,
+      },
+      {
+        title: "切分",
+        desc: "slow->next = nullptr，切分成 L0→...→L4 與 L5→L6→L7。",
+        order: [0,1,2,3,4,5,6,7],
+        focus: [4,5],
+        phase: 1,
+        line: 21,
+      },
+      {
+        title: "反轉後半迴圈檢查",
+        desc: "進入 while (cur)。",
+        order: [0,1,2,3,4,5,6,7],
+        focus: [5],
+        phase: 2,
+        line: 22,
+      },
+      {
+        title: "暫存下一個節點",
+        desc: "ListNode* nxt = cur->next。",
+        order: [0,1,2,3,4,5,6,7],
+        focus: [5],
+        phase: 2,
+        line: 23,
+      },
+      {
+        title: "反轉指向",
+        desc: "cur->next = prev。",
+        order: [0,1,2,3,4,5,6,7],
+        focus: [5],
+        phase: 2,
+        line: 24,
+      },
+      {
+        title: "prev 前進",
+        desc: "prev = cur。",
+        order: [0,1,2,3,4,5,6,7],
+        focus: [5],
+        phase: 2,
+        line: 25,
+      },
+      {
+        title: "cur 前進",
+        desc: "cur = nxt。",
+        order: [0,1,2,3,4,5,6,7],
+        focus: [6],
+        phase: 2,
+        line: 26,
+      },
+      {
+        title: "反轉後半迴圈檢查",
+        desc: "第二輪 while (cur)。",
+        order: [0,1,2,3,4,5,6,7],
+        focus: [6],
+        phase: 2,
+        line: 22,
+      },
+      {
+        title: "暫存下一個節點",
+        desc: "ListNode* nxt = cur->next。",
+        order: [0,1,2,3,4,5,6,7],
+        focus: [6],
+        phase: 2,
+        line: 23,
+      },
+      {
+        title: "反轉指向",
+        desc: "cur->next = prev。",
+        order: [0,1,2,3,4,6,5,7],
+        focus: [6],
+        phase: 2,
+        line: 24,
+      },
+      {
+        title: "prev 前進",
+        desc: "prev = cur。",
+        order: [0,1,2,3,4,6,5,7],
+        focus: [6],
+        phase: 2,
+        line: 25,
+      },
+      {
+        title: "cur 前進",
+        desc: "cur = nxt。",
+        order: [0,1,2,3,4,6,5,7],
+        focus: [7],
+        phase: 2,
+        line: 26,
+      },
+      {
+        title: "反轉後半迴圈檢查",
+        desc: "第三輪 while (cur)。",
+        order: [0,1,2,3,4,6,5,7],
+        focus: [7],
+        phase: 2,
+        line: 22,
+      },
+      {
+        title: "暫存下一個節點",
+        desc: "ListNode* nxt = cur->next。",
+        order: [0,1,2,3,4,6,5,7],
+        focus: [7],
+        phase: 2,
+        line: 23,
+      },
+      {
+        title: "反轉指向",
+        desc: "cur->next = prev。",
+        order: [0,1,2,3,4,7,6,5],
+        focus: [7],
+        phase: 2,
+        line: 24,
+      },
+      {
+        title: "prev 前進",
+        desc: "prev = cur。",
+        order: [0,1,2,3,4,7,6,5],
+        focus: [7],
+        phase: 2,
+        line: 25,
+      },
+      {
+        title: "cur 前進",
+        desc: "cur = nxt (nullptr)。",
+        order: [0,1,2,3,4,7,6,5],
+        focus: [5],
+        phase: 2,
+        line: 26,
+      },
+      {
+        title: "開始交錯合併",
+        desc: "while (p2) 進入合併。",
+        order: [0,1,2,3,4,7,6,5],
+        focus: [0,7],
+        phase: 3,
+        line: 32,
+      },
+      {
+        title: "暫存下一個節點",
+        desc: "ListNode* n1 = p1->next。",
+        order: [0,1,2,3,4,7,6,5],
+        focus: [0,1],
+        phase: 3,
+        line: 33,
+      },
+      {
+        title: "暫存下一個節點",
+        desc: "ListNode* n2 = p2->next。",
+        order: [0,1,2,3,4,7,6,5],
+        focus: [7,6],
+        phase: 3,
+        line: 34,
+      },
+      {
+        title: "交錯連接",
+        desc: "p1->next = p2。",
+        order: [0,7,1,2,3,4,6,5],
+        focus: [0,7],
+        phase: 3,
+        line: 35,
+      },
+      {
+        title: "交錯連接",
+        desc: "p2->next = n1。",
+        order: [0,7,1,2,3,4,6,5],
+        focus: [7,1],
+        phase: 3,
+        line: 36,
+      },
+      {
+        title: "p1 前進",
+        desc: "p1 = n1。",
+        order: [0,7,1,2,3,4,6,5],
+        focus: [1],
+        phase: 3,
+        line: 37,
+      },
+      {
+        title: "p2 前進",
+        desc: "p2 = n2。",
+        order: [0,7,1,2,3,4,6,5],
+        focus: [6],
+        phase: 3,
+        line: 38,
+      },
+      {
+        title: "合併迴圈檢查",
+        desc: "while (p2) 進入第二輪。",
+        order: [0,7,1,2,3,4,6,5],
+        focus: [1,6],
+        phase: 3,
+        line: 32,
+      },
+      {
+        title: "暫存下一個節點",
+        desc: "ListNode* n1 = p1->next。",
+        order: [0,7,1,2,3,4,6,5],
+        focus: [1,2],
+        phase: 3,
+        line: 33,
+      },
+      {
+        title: "暫存下一個節點",
+        desc: "ListNode* n2 = p2->next。",
+        order: [0,7,1,2,3,4,6,5],
+        focus: [6,5],
+        phase: 3,
+        line: 34,
+      },
+      {
+        title: "交錯連接",
+        desc: "p1->next = p2。",
+        order: [0,7,1,6,2,3,4,5],
+        focus: [1,6],
+        phase: 3,
+        line: 35,
+      },
+      {
+        title: "交錯連接",
+        desc: "p2->next = n1。",
+        order: [0,7,1,6,2,3,4,5],
+        focus: [6,2],
+        phase: 3,
+        line: 36,
+      },
+      {
+        title: "p1 前進",
+        desc: "p1 = n1。",
+        order: [0,7,1,6,2,3,4,5],
+        focus: [2],
+        phase: 3,
+        line: 37,
+      },
+      {
+        title: "p2 前進",
+        desc: "p2 = n2。",
+        order: [0,7,1,6,2,3,4,5],
+        focus: [5],
+        phase: 3,
+        line: 38,
+      },
+      {
+        title: "合併迴圈檢查",
+        desc: "while (p2) 進入第三輪。",
+        order: [0,7,1,6,2,3,4,5],
+        focus: [2,5],
+        phase: 3,
+        line: 32,
+      },
+      {
+        title: "暫存下一個節點",
+        desc: "ListNode* n1 = p1->next。",
+        order: [0,7,1,6,2,3,4,5],
+        focus: [2,3],
+        phase: 3,
+        line: 33,
+      },
+      {
+        title: "暫存下一個節點",
+        desc: "ListNode* n2 = p2->next。",
+        order: [0,7,1,6,2,3,4,5],
+        focus: [5,4],
+        phase: 3,
+        line: 34,
+      },
+      {
+        title: "交錯連接",
+        desc: "p1->next = p2。",
+        order: [0,7,1,6,2,5,3,4],
+        focus: [2,5],
+        phase: 3,
+        line: 35,
+      },
+      {
+        title: "交錯連接",
+        desc: "p2->next = n1。",
+        order: [0,7,1,6,2,5,3,4],
+        focus: [5,3],
+        phase: 3,
+        line: 36,
+      },
+      {
+        title: "p1 前進",
+        desc: "p1 = n1。",
+        order: [0,7,1,6,2,5,3,4],
+        focus: [3],
+        phase: 3,
+        line: 37,
+      },
+      {
+        title: "p2 前進",
+        desc: "p2 = n2 (nullptr)。",
+        order: [0,7,1,6,2,5,3,4],
+        focus: [4],
+        phase: 3,
+        line: 38,
+      },
+      {
+        title: "完成",
+        desc: "最終結果 L0→L7→L1→L6→L2→L5→L3→L4。",
+        order: [0,7,1,6,2,5,3,4],
+        focus: [3,4],
+        phase: 3,
+        line: 40,
+      },
+    ];
+
+    const nodesEl = document.getElementById("nodes");
+    const stepTitle = document.getElementById("stepTitle");
+    const stepDesc = document.getElementById("stepDesc");
+    const codeEl = document.getElementById("code");
+    const phaseEl = document.getElementById("phase");
+
+    let stepIndex = 0;
+    let timer = null;
+
+    function renderCode(activeLine) {
+      codeEl.innerHTML = "";
+      codeLines.forEach((line, idx) => {
+        const lineNo = idx + 1;
+        const row = document.createElement("div");
+        row.className = "code-line" + (lineNo === activeLine ? " active" : "");
+        row.innerHTML = `<span class="line-no">${lineNo}</span><span>${line || " "}</span>`;
+        codeEl.appendChild(row);
+      });
+    }
+
+    function renderNodes(order, focus) {
+      nodesEl.innerHTML = "";
+      order.forEach((value, idx) => {
+        const node = document.createElement("div");
+        node.className = "node" + (idx % 2 === 1 ? " secondary" : "");
+        if (focus.includes(value)) node.classList.add("focus");
+        node.textContent = `L${value}`;
+        nodesEl.appendChild(node);
+      });
+    }
+
+    function applyStep() {
+      const step = steps[stepIndex];
+      stepTitle.textContent = step.title;
+      stepDesc.textContent = step.desc;
+      phaseEl.textContent = `Phase ${step.phase}/3`;
+      renderNodes(step.order, step.focus);
+      renderCode(step.line);
+    }
+
+    function nextStep() {
+      if (stepIndex >= steps.length - 1) {
+        return;
+      }
+      stepIndex += 1;
+      applyStep();
+    }
+
+    function prevStep() {
+      if (stepIndex <= 0) {
+        return;
+      }
+      stepIndex -= 1;
+      applyStep();
+    }
+
+    function reset() {
+      stepIndex = 0;
+      applyStep();
+    }
+
+    function togglePlay() {
+      const btn = document.getElementById("playBtn");
+      if (stepIndex >= steps.length - 1) {
+        return;
+      }
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+        btn.textContent = "播放";
+        return;
+      }
+      btn.textContent = "暫停";
+      const speed = Number(document.getElementById("speedSel").value);
+      timer = setInterval(() => {
+        if (stepIndex >= steps.length - 1) {
+          clearInterval(timer);
+          timer = null;
+          btn.textContent = "播放";
+          return;
+        }
+        nextStep();
+      }, speed);
+    }
+
+    document.getElementById("nextBtn").addEventListener("click", () => {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+        document.getElementById("playBtn").textContent = "播放";
+      }
+      nextStep();
+    });
+    document.getElementById("prevBtn").addEventListener("click", () => {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+        document.getElementById("playBtn").textContent = "播放";
+      }
+      prevStep();
+    });
+    document.getElementById("resetBtn").addEventListener("click", () => {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+        document.getElementById("playBtn").textContent = "播放";
+      }
+      reset();
+    });
+    document.getElementById("playBtn").addEventListener("click", togglePlay);
+    document.getElementById("speedSel").addEventListener("change", () => {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+        document.getElementById("playBtn").textContent = "播放";
+      }
+    });
+
+    applyStep();
+  </script>
+</body>
+</html>
