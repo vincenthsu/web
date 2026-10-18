@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Grind 75 · C++ 手動跑題白板視覺化實驗室</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Albert+Sans:wght@400;500;600;700&family=Alumni+Sans:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <!-- Impeccable Top Editorial & Instrument Header -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <button id="btn-toggle-sidebar" class="ks-key-btn icon-only" title="切換題庫側欄" aria-label="切換題庫側欄" aria-controls="sidebar" aria-expanded="true">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="12" x2="15" y2="12"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+      </button>
+      <div class="brand" id="brand-home">
+        <span class="brand-logo" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
+            <path d="M5 2.5 L13.5 2.5 L5.5 21.5 L5 21.5 Q2.5 21.5 2.5 19 L2.5 5 Q2.5 2.5 5 2.5 Z"></path>
+            <path d="M16.5 2.5 L19 2.5 Q21.5 2.5 21.5 5 L21.5 19 Q21.5 21.5 19 21.5 L8.5 21.5 Z"></path>
+          </svg>
+        </span>
+        <span class="brand-wordmark">GRIND 75</span>
+        <span class="brand-divider">/</span>
+        <h1>C++ 手動跑題白板</h1>
+      </div>
+    </div>
+
+    <!-- Tactile Instrument Mode Switcher -->
+    <div class="topbar-center">
+      <div class="ks-instrument-strip" role="tablist" aria-label="切換檢視模式">
+        <button id="nav-catalog-btn" class="ks-instrument-key active" role="tab" aria-selected="true">
+          <span class="led-dot"></span>
+          <span id="catalog-nav-label">01 · 題庫總目錄 (75 / 169)</span>
+        </button>
+        <button id="nav-visualizer-btn" class="ks-instrument-key" role="tab" aria-selected="false">
+          <span class="led-dot"></span>
+          <span>02 · 單步跑題白板 (#1 Two Sum)</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="topbar-right">
+      <div class="progress-meter" title="目前已實作視覺化題數">
+        <span class="meter-label">LIVE</span>
+        <strong id="implemented-count">169 / 169</strong>
+      </div>
+      <button id="btn-theme-toggle" class="ks-key-btn" title="切換紙張亮色 / 暗色白板模式">
+        <span id="theme-icon">☀ 紙張白板</span>
+      </button>
+      <a href="https://www.techinterviewhandbook.org/grind75/" target="_blank" rel="noopener" class="editorial-link">
+        Grind 75 ↗
+      </a>
+    </div>
+  </header>
+
+  <div class="layout-container">
+    <button id="sidebar-backdrop" class="sidebar-backdrop hidden" aria-label="關閉題庫側欄" tabindex="-1"></button>
+    <!-- Left Quick Directory Palette Sidebar -->
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <div id="curriculum-index-label" class="sidebar-eyebrow">CURRICULUM INDEX · 75 題</div>
+        <div class="search-box">
+          <input type="search" id="sidebar-search" placeholder="搜尋題號、名稱或分類..." />
+        </div>
+        <div class="sidebar-filters">
+          <button class="filter-chip active" data-filter="all">全部</button>
+          <button class="filter-chip" data-filter="implemented">已實作</button>
+          <button class="filter-chip" data-filter="Easy">Easy</button>
+          <button class="filter-chip" data-filter="Medium">Med</button>
+          <button class="filter-chip" data-filter="Hard">Hard</button>
+        </div>
+      </div>
+      <div id="sidebar-list" class="sidebar-list"></div>
+    </aside>
+
+    <!-- Main Content Stage -->
+    <main class="main-content">
+      <!-- ==================== VIEW 1: EDITORIAL CATALOG (總目錄) ==================== -->
+      <section id="view-catalog" class="view-section active">
+        <div class="catalog-hero">
+          <div class="catalog-hero-left">
+            <div class="eyebrow-kicker">TECH INTERVIEW HANDBOOK · BY YANGSHUN TAY</div>
+            <h2 class="editorial-headline">Grind 75 演算法視覺化總目錄</h2>
+            <p class="editorial-lead">
+              依學習時間從完整 169 題中安排進度。全部題目皆提供 C++17 單步執行互動白板與雙語題意。
+            </p>
+          </div>
+          <div class="catalog-stats" id="catalog-stats"></div>
+        </div>
+
+        <div class="catalog-toolbar" aria-label="學習排程設定">
+          <div class="toolbar-group">
+            <label for="study-weeks">學習週數</label>
+            <select id="study-weeks" class="tb-select"></select>
+            <label for="study-hours">每週時數</label>
+            <select id="study-hours" class="tb-select"></select>
+          </div>
+          <p id="curriculum-summary" class="curriculum-summary" role="status"></p>
+        </div>
+
+        <!-- Editorial Filter Bar -->
+        <div class="catalog-toolbar">
+          <div class="toolbar-group">
+            <label for="catalog-week-filter">週次進度</label>
+            <select id="catalog-week-filter" class="tb-select">
+              <option value="all">全部週次</option>
+            </select>
+
+            <label for="catalog-topic-filter">資料結構 / 主題</label>
+            <select id="catalog-topic-filter" class="tb-select">
+              <option value="all">全部主題</option>
+            </select>
+
+            <label for="catalog-diff-filter">難度</label>
+            <select id="catalog-diff-filter" class="tb-select">
+              <option value="all">全部難度</option>
+              <option value="Easy">Easy</option>
+              <option value="Medium">Medium</option>
+              <option value="Hard">Hard</option>
+            </select>
+          </div>
+
+          <div class="toolbar-search">
+            <input type="search" id="catalog-search" class="tb-input" placeholder="輸入題號或中英文名稱搜尋..." />
+          </div>
+        </div>
+
+        <!-- Weeks Index Ledger -->
+        <div id="catalog-weeks-container" class="catalog-weeks-container"></div>
+      </section>
+
+      <!-- ==================== VIEW 2: C++ TRACE WHITEBOARD (單步跑題白板) ==================== -->
+      <section id="view-visualizer" class="view-section visualizer-layout">
+        <!-- Top Problem Spec & Testcase Strip -->
+        <div class="problem-spec-bar">
+          <div class="problem-spec-left">
+            <div class="problem-meta-row">
+              <span class="spec-pill mono" id="vis-problem-order">GRIND #1 · LC #1</span>
+              <span class="difficulty-badge Easy" id="vis-problem-diff">Easy</span>
+              <span class="spec-pill" id="vis-problem-topic">Array / Hash Table</span>
+              <span class="spec-pill mono" id="vis-problem-time">15m</span>
+            </div>
+            <h2 id="vis-problem-title">1. Two Sum · 兩數之和</h2>
+            <p class="problem-desc" id="vis-problem-desc"></p>
+          </div>
+
+          <div class="problem-spec-right">
+            <div class="testcase-row">
+              <label for="preset-select">預設測資</label>
+              <select id="preset-select" class="tb-select"></select>
+            </div>
+            <div class="custom-input-row" id="custom-input-row">
+              <div id="custom-inputs-fields" style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                <div class="input-group">
+                  <label for="input-nums"><code>nums</code></label>
+                  <input type="text" id="input-nums" class="tb-input mono" value="2, 7, 11, 15" />
+                </div>
+                <div class="input-group input-group-small">
+                  <label for="input-target"><code>target</code></label>
+                  <input type="number" id="input-target" class="tb-input mono" value="9" />
+                </div>
+              </div>
+              <button id="btn-apply-input" class="ks-key-btn primary">套用測資</button>
+            </div>
+            <div id="input-error" class="input-error hidden"></div>
+          </div>
+        </div>
+
+        <!-- Impeccable Tactile Hardware Playback Deck (單步執行與自動執行控制盤) -->
+        <div class="instrument-deck">
+          <div class="deck-transport">
+            <button id="btn-reset" class="deck-key" title="重置到第一步 (快捷鍵: R)">
+              <span>⏮ 重置</span>
+            </button>
+            <button id="btn-prev" class="deck-key" title="單步退回上一步 (快捷鍵: ←)">
+              <span>⏪ 上一步</span>
+            </button>
+            <button id="btn-play" class="deck-key play-key" title="自動執行 / 暫停 (快捷鍵: Space)">
+              <span class="play-led"></span>
+              <span id="play-btn-label">▶ 自動執行</span>
+            </button>
+            <button id="btn-next" class="deck-key" title="單步執行下一步 (快捷鍵: →)">
+              <span>下一步 ⏩</span>
+            </button>
+          </div>
+
+          <div class="deck-scrubber">
+            <span class="step-Readout" id="step-counter">STEP 01 / 01</span>
+            <div class="recessed-track-wrap">
+              <input type="range" id="step-slider" min="0" max="0" value="0" aria-label="執行步驟進度" />
+            </div>
+          </div>
+
+          <div class="deck-speed">
+            <label for="speed-select">SPEED</label>
+            <select id="speed-select" class="deck-select">
+              <option value="1800">0.5× 慢速</option>
+              <option value="1000" selected>1.0× 標準</option>
+              <option value="580">1.8× 流暢</option>
+              <option value="300">3.0× 快速</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Split Workbench: Left C++ Instrument Code Panel + Right Trace-by-Hand Whiteboard -->
+        <div class="workbench-split">
+          <!-- LEFT: Problem Reading / C++17 Code Workspace -->
+          <div class="code-instrument-panel" id="workspace-panel">
+            <div class="workspace-tabs" role="tablist" aria-label="左側工作區">
+              <button id="tab-english" class="workspace-tab" type="button" role="tab" aria-selected="true" aria-controls="panel-english" tabindex="0">英文原文</button>
+              <button id="tab-statement" class="workspace-tab" type="button" role="tab" aria-selected="false" aria-controls="panel-statement" tabindex="-1">正體中文</button>
+              <button id="tab-code" class="workspace-tab" type="button" role="tab" aria-selected="false" aria-controls="panel-code" tabindex="-1">程式碼 <span class="mono">C++17</span></button>
+            </div>
+            <section id="panel-english" class="workspace-pane problem-reading-pane" role="tabpanel" aria-labelledby="tab-english" tabindex="0" lang="en">
+              <article id="problem-statement-en" class="problem-statement english-statement"></article>
+            </section>
+            <section id="panel-statement" class="workspace-pane problem-reading-pane" role="tabpanel" aria-labelledby="tab-statement" tabindex="0" lang="zh-Hant" hidden>
+              <article id="problem-statement" class="problem-statement"></article>
+            </section>
+            <section id="panel-code" class="workspace-pane code-view" role="tabpanel" aria-labelledby="tab-code" hidden>
+              <div class="instrument-header">
+                <div class="instrument-title">
+                  <span class="kinpaku-dot"></span>
+                  <span>solution.cpp — C++17 單步執行反白追蹤</span>
+                </div>
+                <span class="active-line-pill" id="active-line-badge">LINE 03</span>
+              </div>
+
+              <div class="code-container" id="cpp-code-container"></div>
+
+              <!-- C++ Local Variables Strip -->
+              <div class="instrument-footer">
+                <div class="instrument-subhead">
+                  <span>LOCAL VARIABLES · 區域變數即時監看</span>
+                  <span class="mono-dim" id="vis-complexity-badge">Time O(N) · Space O(N)</span>
+                </div>
+                <div id="variable-watch-grid" class="variable-watch-grid"></div>
+              </div>
+            </section>
+          </div>
+
+          <div id="workbench-divider" class="workbench-divider" role="separator" tabindex="0"
+            aria-label="調整題目／程式碼與白板大小" aria-controls="workspace-panel whiteboard-board"
+            aria-orientation="vertical" aria-valuemin="320" aria-valuemax="1000" aria-valuenow="500"
+            title="拖曳調整區塊大小；方向鍵微調，雙擊恢復預設"></div>
+
+          <!-- RIGHT: Trace-by-Hand Interactive Whiteboard Canvas (手動跑題白板) -->
+          <div class="whiteboard-container" id="whiteboard-board">
+            <!-- Top-left Whiteboard Status & Hint -->
+            <div class="wb-top-bar">
+              <div class="wb-badge">
+                <span class="wb-dot"></span>
+                <span>手動跑題白板 (Trace-by-Hand Whiteboard)</span>
+              </div>
+              <span class="wb-hint">💡 元件可直接拖曳移動 · 亦可使用下方畫筆在白板上自由手寫標記</span>
+            </div>
+
+            <!-- Pan/Zoom World Layer -->
+            <div class="wb-world" id="wb-world">
+              <!-- SVG Connector & Freehand Stroke Layer -->
+              <svg class="wb-svg-layer" id="wb-svg" aria-hidden="true">
+                <defs>
+                  <marker id="wb-arrow-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+                    <path d="M0,0 L10,5 L0,10 z" fill="var(--marker)" />
+                  </marker>
+                  <marker id="wb-arrow-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+                    <path d="M0,0 L10,5 L0,10 z" fill="var(--green)" />
+                  </marker>
+                  <marker id="wb-arrow-purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+                    <path d="M0,0 L10,5 L0,10 z" fill="var(--purple)" />
+                  </marker>
+                  <marker id="wb-arrow-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+                    <path d="M0,0 L10,5 L0,10 z" fill="var(--red)" />
+                  </marker>
+                </defs>
+                <g id="wb-Connectors"></g>
+                <g id="wb-strokes"></g>
+              </svg>
+
+              <!-- Whiteboard Component 1: Sticky Note (手動跑題便利貼) -->
+              <div class="wb-item" id="wb-item-note" style="left: 24px; top: 52px;">
+                <div class="grip">⠿ <span class="nm">step_note</span><span>便利貼 · 當前步驟解說</span></div>
+                <div class="note" id="wb-sticky-note">
+                  <div class="note-tag" id="step-action-tag">初始化</div>
+                  <div class="note-body" id="step-explanation-text">準備開始執行演算法...</div>
+                </div>
+              </div>
+
+              <!-- Legacy / Default Two-Sum Whiteboard Components -->
+              <div class="wb-item" id="wb-item-array" style="left: 340px; top: 52px;">
+                <div class="grip">⠿ <span class="nm">nums</span><span>陣列 (vector&lt;int&gt;)</span></div>
+                <div id="array-visual-container" class="wb-array-stage"></div>
+              </div>
+
+              <div class="wb-item" id="wb-item-vars" style="left: 24px; top: 220px;">
+                <div class="grip">⠿ <span class="nm">complement</span><span>變數計算</span></div>
+                <div id="formula-visual-container" class="wb-vars-stage"></div>
+              </div>
+
+              <div class="wb-item" id="wb-item-dict" style="left: 340px; top: 215px;">
+                <div class="grip">⠿ <span class="nm">seen</span><span>字典 (unordered_map&lt;int, int&gt;)</span></div>
+                <div id="hashmap-visual-container" class="wb-dict-stage"></div>
+              </div>
+
+              <!-- Universal Declarative Whiteboard Components Container (for Problems #2-#75) -->
+              <div id="wb-dynamic-items"></div>
+
+              <!-- Whiteboard Component 5: Step Trace Table (手動跑題步驟表格) -->
+              <div class="wb-item" id="wb-item-steps" style="left: 24px; top: 480px;">
+                <div class="grip">⠿ <span class="nm">trace_log</span><span>表格 · 點擊任意列跳轉步驟</span></div>
+                <div class="wb-steps-wrap">
+                  <table class="steps" id="wb-steps-table">
+                    <thead>
+                      <tr id="wb-steps-head-row">
+                        <th>步驟</th>
+                        <th>C++ 行號</th>
+                        <th>i</th>
+                        <th>nums[i]</th>
+                        <th>complement</th>
+                        <th>回傳值</th>
+                        <th style="text-align:left;">動作摘要</th>
+                      </tr>
+                    </thead>
+                    <tbody id="execution-log-list"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- Trace-by-Hand Floating Bottom Dock (選取/移畫面/畫筆/清除筆跡/重置排版) -->
+            <div class="wb-dock" role="toolbar" aria-label="白板工具列">
+              <button class="dockb active" data-wb-tool="select" type="button" title="選取與拖曳元件 (V)">
+                <svg viewBox="0 0 24 24" width="17" height="17"><path d="M5 3l14 8-6.5 1.5L9 19z" fill="currentColor"/></svg>
+              </button>
+              <button class="dockb" data-wb-tool="hand" type="button" title="平移畫布 (H)">
+                <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 13V5.5a1.5 1.5 0 013 0V12m0-6.5a1.5 1.5 0 013 0V12m0-5a1.5 1.5 0 013 0v7.5a6 6 0 01-6 6h-.8a6 6 0 01-4.6-2.2L4.3 15a1.6 1.6 0 012.4-2L8 14.5"/></svg>
+              </button>
+              <button class="dockb" data-wb-tool="pen" type="button" title="白板馬克筆手寫註記 (P)">
+                <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 7l3 3"/></svg>
+              </button>
+              <span class="dsep"></span>
+              <button class="dockb" id="btn-clear-strokes" type="button" title="清除手寫筆跡">
+                <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 16l9-9 6 6-6 6H6z"/><path d="M11 20h9"/></svg>
+              </button>
+              <button class="dockb" id="btn-reset-layout" type="button" title="重置白板元件位置與縮放">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+              </button>
+            </div>
+
+            <!-- Bottom-Right Zoom & Pan Controls -->
+            <div class="wb-navi">
+              <div class="zrow">
+                <button class="zb" id="wb-fit" type="button" title="將所有白板元件縮放至可視範圍">適合畫面</button>
+                <button class="zb" id="wb-zout" type="button" title="縮小畫布">−</button>
+                <button class="zb zv" id="wb-zv" type="button" title="重置為 100%">100%</button>
+                <button class="zb" id="wb-zin" type="button" title="放大畫布">＋</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Scripts -->
+  <script src="js/data/grind75-catalog.js"></script>
+  <script src="js/data/curriculum.js"></script>
+  <script src="js/problems/two-sum.js"></script>
+  <script src="js/problems/week1-extra.js"></script>
+  <script src="js/problems/week2.js"></script>
+  <script src="js/problems/week3.js"></script>
+  <script src="js/problems/week4.js"></script>
+  <script src="js/problems/week5.js"></script>
+  <script src="js/problems/week6.js"></script>
+  <script src="js/problems/week7.js"></script>
+  <script src="js/problems/week8.js"></script>
+  <script src="js/problems/extended-01.js"></script>
+  <script src="js/problems/extended-02.js"></script>
+  <script src="js/problems/extended-03.js"></script>
+  <script src="js/problems/extended-04.js"></script>
+  <script src="js/problems/extended-05.js"></script>
+  <script src="js/problems/extended-06.js"></script>
+  <script src="js/problems/extended-07.js"></script>
+  <script src="js/problems/extended-08.js"></script>
+  <script src="js/data/problem-statements.js"></script>
+  <script src="js/data/problem-statements-en.js"></script>
+  <script src="js/engine/player.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
